@@ -1,6 +1,6 @@
 {
   "name": "golden-power",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "main": "main.js",
   "homepage": "./",
   "description": "Golden Power ERP Desktop Application",
@@ -63,7 +63,8 @@
     },
 
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "verifyUpdateCodeSignature": false
     },
 
     "nsis": {
