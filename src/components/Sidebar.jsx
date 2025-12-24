@@ -37,13 +37,12 @@ const Sidebar = () => {
       background: darkMode 
         ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' 
         : 'linear-gradient(180deg, #ffffff 40%, #fffbeb 100%)',
-      boxShadow: isSidebarCollapsed ? 'none' : '10px 0 30px rgba(0,0,0,0.1)', 
-      borderRight: darkMode ? '1px solid #1e293b' : '1px solid #fcd34d',
+      boxShadow: isSidebarCollapsed ? 'none' : '4px 0 24px rgba(0,0,0,0.08)', 
+      borderRight: darkMode ? '1px solid #1e293b' : '1px solid rgba(251, 191, 36, 0.3)',
       color: darkMode ? '#e2e8f0' : '#4b5563',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: "'Inter', sans-serif",
-      // Smooth Transition for width and background
       transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease',
       overflowX: 'hidden',
       whiteSpace: 'nowrap' 
@@ -53,26 +52,25 @@ const Sidebar = () => {
       height: '80px',
       display: 'flex',
       alignItems: 'center',
-      // FIXED ALIGNMENT: 20px padding ensures Logo aligns perfectly with Icons
       padding: '0 20px', 
       borderBottom: darkMode ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(251, 191, 36, 0.2)',
-      marginBottom: '10px',
+      marginBottom: '16px',
       background: darkMode ? 'rgba(0,0,0,0.2)' : 'rgba(251, 191, 36, 0.05)',
       transition: 'all 0.3s ease'
     },
 
     brandLogo: {
-      minWidth: '40px',
+      minWidth: '40px', 
       height: '40px',
       background: 'linear-gradient(135deg, #fbbf24, #b45309)',
-      borderRadius: '8px',
+      borderRadius: '10px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       color: '#fff',
-      fontWeight: 'bold',
+      fontWeight: '800',
       fontSize: '1.2rem',
-      boxShadow: '0 4px 6px rgba(0,0,0,0.2)',
+      boxShadow: '0 4px 6px rgba(251, 191, 36, 0.3)',
       zIndex: 2,
     },
 
@@ -92,7 +90,7 @@ const Sidebar = () => {
       fontSize: '1.1rem',
       fontWeight: '800',
       textTransform: 'uppercase',
-      filter: 'drop-shadow(0 2px 4px rgba(251, 191, 36, 0.3))'
+      letterSpacing: '0.5px'
     },
 
     scrollArea: {
@@ -103,31 +101,26 @@ const Sidebar = () => {
     },
 
     navItem: {
-      marginBottom: '6px',
+      marginBottom: '4px',
       padding: '0 12px', 
     },
 
     link: (isActive) => ({
       position: 'relative',
-      height: '50px',
+      height: '48px',
       color: isActive 
         ? (darkMode ? '#fff' : '#111827') 
         : (darkMode ? '#94a3b8' : '#6b7280'),
       background: isActive 
-        ? 'linear-gradient(90deg, rgba(251, 191, 36, 0.2), rgba(251, 191, 36, 0.05))' 
+        ? 'linear-gradient(90deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.02))' 
         : 'transparent',
       borderLeft: isActive ? '4px solid #fbbf24' : '4px solid transparent',
       borderRadius: '8px',
       display: 'flex',
       alignItems: 'center',
-      
-      // --- THE FIX: ALWAYS LEFT ALIGNED ---
-      // We set paddingLeft to 20px. This aligns the icon exactly under the Brand Logo.
-      // Even when collapsed (80px width), the icon sits at 20px from the left.
       justifyContent: 'flex-start', 
       paddingLeft: '20px', 
-      paddingRight: '0', 
-      
+      paddingRight: '12px', 
       textDecoration: 'none',
       fontWeight: isActive ? '600' : '500',
       transition: 'all 0.2s ease',
@@ -136,18 +129,18 @@ const Sidebar = () => {
     }),
 
     icon: (isActive) => ({
-      fontSize: '1.3rem',
-      minWidth: '24px', 
+      fontSize: '1.25rem',
+      minWidth: '40px', // ALIGNMENT FIX: Matches Brand Logo Width
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       color: isActive ? '#fbbf24' : (darkMode ? '#64748b' : '#9ca3af'),
-      filter: isActive ? 'drop-shadow(0 0 5px rgba(251, 191, 36, 0.4))' : 'none',
+      filter: isActive ? 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.3))' : 'none',
       transition: 'all 0.3s ease'
     }),
 
     linkLabel: {
-      marginLeft: '14px',
+      marginLeft: '10px',
       opacity: isSidebarCollapsed ? 0 : 1,
       width: isSidebarCollapsed ? 0 : 'auto', 
       transform: isSidebarCollapsed ? 'translateX(-10px)' : 'translateX(0)',
@@ -156,10 +149,9 @@ const Sidebar = () => {
     },
 
     arrow: (isOpen) => ({
-      fontSize: '0.8rem',
+      fontSize: '0.75rem',
       marginLeft: 'auto',
-      marginRight: '10px', 
-      opacity: isSidebarCollapsed ? 0 : 0.7,
+      opacity: isSidebarCollapsed ? 0 : 0.6,
       transition: 'transform 0.3s, opacity 0.2s',
       transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)'
     }),
@@ -168,27 +160,23 @@ const Sidebar = () => {
       maxHeight: (isOpen && !isSidebarCollapsed) ? '300px' : '0', 
       opacity: (isOpen && !isSidebarCollapsed) ? 1 : 0,
       overflow: 'hidden',
-      // Slide In/Out Animation
-      transform: (isOpen && !isSidebarCollapsed) ? 'translateX(0)' : 'translateX(-10px)',
-      transition: 'all 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
-      
-      background: darkMode ? '#020617' : '#fffbeb',
-      boxShadow: isOpen ? (darkMode ? 'inset 0 4px 6px -1px rgba(0, 0, 0, 0.3)' : 'inset 0 2px 4px -1px rgba(251, 191, 36, 0.1)') : 'none',
-      borderRadius: '8px',
-      margin: (isOpen && !isSidebarCollapsed) ? '4px 12px 12px 12px' : '0 12px 0 12px', 
+      transform: (isOpen && !isSidebarCollapsed) ? 'translateY(0)' : 'translateY(-5px)',
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      marginBottom: (isOpen && !isSidebarCollapsed) ? '8px' : '0', 
     }),
 
     subLink: (isActive) => ({
-      padding: '10px 10px 10px 20px',
-      fontSize: '0.9rem',
+      // ALIGNMENT FIX: 20px (Pad) + 40px (Icon) + 10px (Gap) = 70px indent
+      padding: '8px 12px 8px 70px', 
+      fontSize: '0.85rem',
       color: isActive ? '#fbbf24' : (darkMode ? '#94a3b8' : '#6b7280'),
       textDecoration: 'none',
       display: 'block',
       fontWeight: isActive ? '600' : '400',
-      borderLeft: isActive ? '2px solid #fbbf24' : '2px solid transparent',
-      transition: 'color 0.2s ease',
-      background: isActive ? (darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(251, 191, 36, 0.1)') : 'transparent',
-      whiteSpace: 'nowrap'
+      transition: 'all 0.2s ease',
+      borderRadius: '8px',
+      background: isActive ? (darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)') : 'transparent',
+      margin: '2px 0'
     }),
 
     footer: {
@@ -237,7 +225,7 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 2. INVENTORY (NEW) */}
+        {/* 2. INVENTORY */}
         <li style={styles.navItem}>
           <NavLink to="/inventory" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -249,7 +237,31 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 3. BILLING */}
+        {/* 3. SERVICE MANAGEMENT */}
+        <li style={styles.navItem}>
+          <NavLink to="/services" style={({ isActive }) => styles.link(isActive)}>
+            {({ isActive }) => (
+              <>
+                <i className="bi bi-tools" style={styles.icon(isActive)}></i>
+                <span style={styles.linkLabel}>Service Mgmt</span>
+              </>
+            )}
+          </NavLink>
+        </li>
+
+        {/* 4. EMPLOYEE MANAGEMENT */}
+        <li style={styles.navItem}>
+          <NavLink to="/employees" style={({ isActive }) => styles.link(isActive)}>
+            {({ isActive }) => (
+              <>
+                <i className="bi bi-person-badge" style={styles.icon(isActive)}></i>
+                <span style={styles.linkLabel}>Employees</span>
+              </>
+            )}
+          </NavLink>
+        </li>
+
+        {/* 5. BILLING (DROPDOWN) */}
         <li style={styles.navItem}>
           <div 
             style={styles.link(activeMenu === 'billing')} 
@@ -261,14 +273,14 @@ const Sidebar = () => {
           </div>
 
           <div style={styles.subMenuContainer(activeMenu === 'billing')}>
-            <div className="d-flex flex-column py-2">
-              <NavLink to="/billing" style={({ isActive }) => styles.subLink(isActive)}>New Invoice</NavLink>
+            <div className="d-flex flex-column">
+              <NavLink to="/billing" style={({ isActive }) => styles.subLink(isActive)}>Create Bill</NavLink>
               <NavLink to="/view-bills" style={({ isActive }) => styles.subLink(isActive)}>Sales History</NavLink>
             </div>
           </div>
         </li>
 
-        {/* 4. ACCOUNTS */}
+        {/* 6. ACCOUNTS */}
         <li style={styles.navItem}>
           <NavLink to="/accounts" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -280,7 +292,7 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 5. REPORTS */}
+        {/* 7. REPORTS (DROPDOWN) */}
         <li style={styles.navItem}>
           <div 
             style={styles.link(activeMenu === 'reports')} 
@@ -292,14 +304,14 @@ const Sidebar = () => {
           </div>
 
           <div style={styles.subMenuContainer(activeMenu === 'reports')}>
-            <div className="d-flex flex-column py-2">
+            <div className="d-flex flex-column">
               <NavLink to="/reports/financial" style={({ isActive }) => styles.subLink(isActive)}>Financial Report</NavLink>
               <NavLink to="/reports/service" style={({ isActive }) => styles.subLink(isActive)}>Service Report</NavLink>
             </div>
           </div>
         </li>
 
-        {/* 6. SETTINGS */}
+        {/* 8. SETTINGS */}
         <li style={styles.navItem}>
           <NavLink to="/settings" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -313,14 +325,7 @@ const Sidebar = () => {
 
       </ul>
 
-      {/* FOOTER */}
-      <div style={styles.footer}>
-        <div style={{...styles.brandLogo, fontSize: '1rem'}}>A</div>
-        <div style={styles.brandDetails}>
-            <div style={{ color: darkMode ? '#fff' : '#111827', fontWeight: '600', fontSize: '0.9rem' }}>Admin User</div>
-            <div style={{ fontSize: '0.75rem', color: '#fbbf24' }}>● Online</div>
-        </div>
-      </div>
+      
     </div>
   );
 };

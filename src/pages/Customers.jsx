@@ -16,10 +16,13 @@ const Customers = () => {
   const [viewMode, setViewMode] = useState('all'); 
   const [debtorsList, setDebtorsList] = useState([]);
   const [loadingDebtors, setLoadingDebtors] = useState(false);
-  const [sortOrder, setSortOrder] = useState('highToLow'); // Used by toggleSort
+  const [sortOrder, setSortOrder] = useState('highToLow'); 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   const [viewLedgerId, setViewLedgerId] = useState(null);
+  
+  // --- NEW: SEARCH STATE ---
+  const [searchQuery, setSearchQuery] = useState('');
 
   // --- THEME ENGINE ---
   const theme = {
@@ -42,8 +45,6 @@ const Customers = () => {
   };
 
   // --- HELPERS ---
-  
-  // 1. Check Phone Logic
   const checkPhone = async (phone) => {
     if (!phone || phone.length < 10) {
         setPhoneStatus({ loading: false, error: null, valid: false });
@@ -62,7 +63,6 @@ const Customers = () => {
     }
   };
 
-  // 2. Submit Logic
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (phoneStatus.error) return;
@@ -81,7 +81,6 @@ const Customers = () => {
     }
   };
 
-  // 3. Delete Logic
   const handleDelete = async (e, id) => {
     e.stopPropagation(); 
     if(!window.confirm("Are you sure?")) return;
@@ -94,12 +93,10 @@ const Customers = () => {
     }
   };
 
-  // 4. Toggle Sort Logic (FIXED: Added this function)
   const toggleSort = () => {
     setSortOrder(prev => prev === 'highToLow' ? 'lowToHigh' : 'highToLow');
   };
 
-  // --- DATA LOADING & SORTING ---
   useEffect(() => {
     if (viewMode === 'debtors') {
       setLoadingDebtors(true);
@@ -110,13 +107,29 @@ const Customers = () => {
     }
   }, [viewMode]);
 
+  // --- FILTER & SORT LOGIC ---
   const getDisplayList = () => {
-    if (viewMode === 'all') return customers;
-    return [...debtorsList].sort((a, b) => {
-      const valA = a.total_due || 0;
-      const valB = b.total_due || 0;
-      return sortOrder === 'highToLow' ? valB - valA : valA - valB;
-    });
+    let list = viewMode === 'all' ? customers : debtorsList;
+
+    // Apply Search
+    if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        list = list.filter(c => 
+            c.name.toLowerCase().includes(query) || 
+            c.phone.includes(query)
+        );
+    }
+
+    // Apply Sort (Only for Debtors view generally, but safe to keep)
+    if (viewMode === 'debtors') {
+        list = [...list].sort((a, b) => {
+            const valA = a.total_due || 0;
+            const valB = b.total_due || 0;
+            return sortOrder === 'highToLow' ? valB - valA : valA - valB;
+        });
+    }
+    
+    return list;
   };
 
   const displayList = getDisplayList();
@@ -175,12 +188,28 @@ const Customers = () => {
       )}
 
       {/* 3. HEADER SECTION */}
-      <div className="d-flex justify-content-between align-items-center mb-4">
+      <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
           <h3 className={`fw-bold m-0 ${theme.text}`}>Customer Management</h3>
           <p className={`small m-0 ${theme.subText}`}>Manage your client database.</p>
         </div>
-        <div className="d-flex gap-3">
+        
+        {/* RIGHT SIDE: SEARCH & ADD BUTTON */}
+        <div className="d-flex align-items-center gap-3 flex-wrap">
+            {/* SEARCH FIELD */}
+            <div className="input-group" style={{ maxWidth: '300px' }}>
+                <span className={`input-group-text border-0 rounded-start-pill ps-3 ${darkMode ? 'bg-secondary text-white' : 'bg-white text-secondary'}`}>
+                    <i className="bi bi-search"></i>
+                </span>
+                <input 
+                    type="text" 
+                    className={`form-control border-0 rounded-end-pill py-2 ${darkMode ? 'bg-secondary text-white placeholder-white-50' : 'bg-white'}`} 
+                    placeholder="Search name or phone..." 
+                    value={searchQuery}
+                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
+                />
+            </div>
+
             <button className="btn btn-primary fw-bold px-4 rounded-pill shadow-sm d-flex align-items-center gap-2" onClick={() => setShowAddModal(true)}>
                 <i className="bi bi-plus-lg"></i> Add Client
             </button>
@@ -221,7 +250,7 @@ const Customers = () => {
                 {loadingDebtors ? (
                     <tr><td colSpan="3" className={`text-center py-5 ${theme.text}`}>Loading...</td></tr>
                 ) : currentItems.length === 0 ? (
-                    <tr><td colSpan="3" className={`text-center py-5 ${theme.subText}`}>No records found.</td></tr>
+                    <tr><td colSpan="3" className={`text-center py-5 ${theme.subText}`}>{searchQuery ? 'No matching customers found.' : 'No records found.'}</td></tr>
                 ) : (
                 currentItems.map((c) => (
                     <tr key={c.id} style={{cursor: 'pointer'}} onClick={() => setViewLedgerId(c.id)} className={theme.text}>

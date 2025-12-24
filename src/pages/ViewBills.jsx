@@ -1,18 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { GlobalContext } from '../context/GlobalState';
 import apiClient from '../api/client';
 
 const ViewBills = () => {
+  const { darkMode } = useContext(GlobalContext);
+
   // --- STATE ---
   const [bills, setBills] = useState([]);
   const [summary, setSummary] = useState({ revenue: 0, profit: 0, count: 0 });
   const [filter, setFilter] = useState('daily'); // daily, weekly, monthly, custom
   const [customRange, setCustomRange] = useState({ start: '', end: '' });
   const [loading, setLoading] = useState(false);
+  const [statusCategory, setStatusCategory] = useState('Accepted'); // 'Accepted' or 'Cancelled'
   
-  // --- NEW: CATEGORY FILTER STATE ---
-  const [statusCategory, setStatusCategory] = useState('Accepted'); // Options: 'Accepted', 'Cancelled'
+  // --- NEW: SEARCH STATE ---
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // --- HELPERS ---
+  // --- THEME ---
+  const theme = {
+    container: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa',
+    text: darkMode ? 'text-white' : 'text-dark',
+    subText: darkMode ? 'text-white-50' : 'text-secondary',
+    card: darkMode ? 'bg-dark border-secondary text-white' : 'bg-white border-0 shadow-sm text-dark',
+    tableHeader: darkMode ? 'table-dark' : 'table-light',
+    input: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-white',
+  };
+
   const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   // --- FETCH DATA ---
@@ -34,34 +47,41 @@ const ViewBills = () => {
     }
   };
 
-  // Auto-fetch when filter changes
   useEffect(() => {
     if (filter !== 'custom') fetchReport();
+    // eslint-disable-next-line
   }, [filter]);
 
-  // --- FILTER BILLS FOR TABLE ---
+  // --- FILTER DISPLAY (Status + Search) ---
   const displayedBills = bills.filter(bill => {
-    // If invoice_status is missing, assume 'Accepted'
+    // 1. Status Check
     const status = bill.invoice_status || 'Accepted'; 
-    return status === statusCategory;
+    const matchesStatus = status === statusCategory;
+
+    // 2. Search Check (Invoice # or Customer Name)
+    const query = searchQuery.toLowerCase();
+    const invoiceMatch = bill.invoice_no?.toString().includes(query);
+    const customerMatch = bill.users?.name?.toLowerCase().includes(query);
+    const matchesSearch = !searchQuery || invoiceMatch || customerMatch;
+
+    return matchesStatus && matchesSearch;
   });
 
   return (
-    <div className="container-fluid p-4">
+    <div className="container-fluid p-4" style={{ minHeight: '100vh', background: theme.container }}>
       
-      {/* 1. HEADER & DATE FILTER SECTION */}
+      {/* HEADER & FILTER */}
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
         <div>
-          <h3 className="fw-bold m-0">Sales Analytics</h3>
-          <p className="text-secondary small m-0">Profit & Revenue Reports</p>
+          <h3 className={`fw-bold m-0 ${theme.text}`}>Sales Analytics</h3>
+          <p className={`small m-0 ${theme.subText}`}>Profit & Revenue Reports</p>
         </div>
 
-        {/* DATE FILTER BUTTONS */}
-        <div className="bg-white p-1 rounded shadow-sm border d-flex flex-wrap align-items-center">
+        <div className={`p-1 rounded shadow-sm border d-flex flex-wrap align-items-center ${darkMode ? 'bg-dark border-secondary' : 'bg-white'}`}>
           {['daily', 'weekly', 'monthly'].map(f => (
             <button 
               key={f}
-              className={`btn btn-sm px-3 fw-bold text-capitalize ${filter === f ? 'btn-dark' : 'text-secondary'}`}
+              className={`btn btn-sm px-3 fw-bold text-capitalize ${filter === f ? 'btn-primary' : theme.text}`}
               onClick={() => setFilter(f)}
             >
               {f}
@@ -70,20 +90,20 @@ const ViewBills = () => {
           
           <div className="border-start mx-2 ps-2 d-flex align-items-center gap-2">
             <button 
-              className={`btn btn-sm fw-bold ${filter === 'custom' ? 'text-primary' : 'text-secondary'}`} 
+              className={`btn btn-sm fw-bold ${filter === 'custom' ? 'text-primary' : theme.text}`} 
               onClick={() => setFilter('custom')}
             >
               Custom:
             </button>
             <input 
-              type="date" className="form-control form-control-sm" 
+              type="date" className={`form-control form-control-sm ${theme.input}`} 
               style={{ width: '130px' }}
               value={customRange.start} 
               onChange={e => setCustomRange({...customRange, start: e.target.value})}
             />
-            <span className="text-muted">-</span>
+            <span className={theme.text}>-</span>
             <input 
-              type="date" className="form-control form-control-sm"
+              type="date" className={`form-control form-control-sm ${theme.input}`}
               style={{ width: '130px' }} 
               value={customRange.end} 
               onChange={e => setCustomRange({...customRange, end: e.target.value})}
@@ -95,9 +115,9 @@ const ViewBills = () => {
         </div>
       </div>
 
-      {/* 2. DATA CARDS (Profit & Revenue) */}
+      {/* METRIC CARDS */}
       <div className="row g-3 mb-4">
-        {/* REVENUE CARD */}
+        {/* REVENUE */}
         <div className="col-md-4">
           <div className="card border-0 shadow-sm text-white" style={{ background: 'linear-gradient(135deg, #1f2937, #111827)' }}>
             <div className="card-body p-4">
@@ -106,74 +126,84 @@ const ViewBills = () => {
                   <small className="text-white-50 text-uppercase fw-bold">Total Revenue</small>
                   <h2 className="fw-bold mb-0 text-warning">{formatINR(summary.revenue)}</h2>
                 </div>
-                <div className="bg-white bg-opacity-10 p-2 rounded">
-                  <i className="bi bi-wallet2 fs-4 text-warning"></i>
-                </div>
+                <div className="bg-white bg-opacity-10 p-2 rounded"><i className="bi bi-wallet2 fs-4 text-warning"></i></div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* PROFIT CARD */}
+        {/* PROFIT */}
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm bg-white border-start border-success border-5">
+          <div className={`card h-100 border-start border-success border-5 ${theme.card}`}>
             <div className="card-body p-4">
               <div className="d-flex justify-content-between align-items-start">
                 <div>
-                  <small className="text-secondary text-uppercase fw-bold">Net Profit</small>
+                  <small className={`text-uppercase fw-bold ${theme.subText}`}>Net Profit</small>
                   <h2 className="fw-bold mb-0 text-success">{formatINR(summary.profit)}</h2>
                 </div>
-                <div className="bg-success bg-opacity-10 p-2 rounded">
-                  <i className="bi bi-graph-up-arrow fs-4 text-success"></i>
-                </div>
+                <div className="bg-success bg-opacity-10 p-2 rounded"><i className="bi bi-graph-up-arrow fs-4 text-success"></i></div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* COUNT CARD */}
+        {/* COUNT */}
         <div className="col-md-4">
-          <div className="card border-0 shadow-sm bg-white">
+          <div className={`card h-100 ${theme.card}`}>
             <div className="card-body p-4">
               <div className="d-flex justify-content-between align-items-start">
                 <div>
-                  <small className="text-secondary text-uppercase fw-bold">Invoices Generated</small>
-                  <h2 className="fw-bold mb-0 text-dark">{summary.count}</h2>
+                  <small className={`text-uppercase fw-bold ${theme.subText}`}>Invoices Generated</small>
+                  <h2 className={`fw-bold mb-0 ${theme.text}`}>{summary.count}</h2>
                 </div>
-                <div className="bg-light p-2 rounded">
-                  <i className="bi bi-receipt fs-4 text-secondary"></i>
-                </div>
+                <div className="bg-secondary bg-opacity-10 p-2 rounded"><i className={`bi bi-receipt fs-4 ${theme.text}`}></i></div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 3. DETAILED LIST WITH CATEGORY TABS */}
-      <div className="card border-0 shadow-sm">
-        
-        {/* Category Header */}
-        <div className="card-header bg-white py-2 border-bottom d-flex justify-content-between align-items-center">
+      {/* TABLE LIST */}
+      <div className={`card ${theme.card}`}>
+        <div className={`card-header py-2 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2 ${theme.card}`}>
+            
+            {/* Left: Status Toggles */}
             <div className="d-flex gap-2">
                 <button 
-                    className={`btn btn-sm fw-bold px-3 ${statusCategory === 'Accepted' ? 'btn-success text-white' : 'btn-light text-secondary border'}`}
+                    className={`btn btn-sm fw-bold px-3 ${statusCategory === 'Accepted' ? 'btn-success text-white' : 'btn-outline-secondary'}`}
                     onClick={() => setStatusCategory('Accepted')}
                 >
-                    <i className="bi bi-check-circle me-2"></i>Accepted Bills
+                    <i className="bi bi-check-circle me-2"></i>Accepted
                 </button>
                 <button 
-                    className={`btn btn-sm fw-bold px-3 ${statusCategory === 'Cancelled' ? 'btn-danger text-white' : 'btn-light text-secondary border'}`}
+                    className={`btn btn-sm fw-bold px-3 ${statusCategory === 'Cancelled' ? 'btn-danger text-white' : 'btn-outline-secondary'}`}
                     onClick={() => setStatusCategory('Cancelled')}
                 >
-                    <i className="bi bi-x-circle me-2"></i>Cancelled Bills
+                    <i className="bi bi-x-circle me-2"></i>Cancelled
                 </button>
             </div>
-            <small className="text-secondary">Showing {filter} records</small>
+
+            {/* Right: Search Field */}
+            <div className="d-flex align-items-center gap-3">
+                <div className="input-group input-group-sm" style={{ width: '250px' }}>
+                    <span className={`input-group-text ${darkMode ? 'bg-secondary border-secondary text-white' : 'bg-white'}`}>
+                        <i className="bi bi-search"></i>
+                    </span>
+                    <input 
+                        type="text" 
+                        className={`form-control ${theme.input}`} 
+                        placeholder="Search Invoice # or Name..." 
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
+                <small className={theme.subText}>Showing {displayedBills.length} records</small>
+            </div>
         </div>
 
         <div className="table-responsive">
-          <table className="table table-hover mb-0 align-middle">
-            <thead className="table-light">
+          <table className="table mb-0 align-middle">
+            <thead className={theme.tableHeader}>
               <tr>
                 <th className="ps-4">Date</th>
                 <th>Invoice #</th>
@@ -184,20 +214,20 @@ const ViewBills = () => {
                 <th className="text-end pe-4">Profit</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={darkMode ? 'border-secondary' : ''}>
               {loading ? (
-                <tr><td colSpan="7" className="text-center py-5">Loading data...</td></tr>
+                <tr><td colSpan="7" className={`text-center py-5 ${theme.text}`}>Loading data...</td></tr>
               ) : displayedBills.length === 0 ? (
                 <tr>
-                    <td colSpan="7" className="text-center py-5 text-muted">
-                        No {statusCategory.toLowerCase()} bills found for this period.
+                    <td colSpan="7" className={`text-center py-5 ${theme.subText}`}>
+                        {searchQuery ? 'No matching bills found.' : `No ${statusCategory.toLowerCase()} bills found for this period.`}
                     </td>
                 </tr>
               ) : (
                 displayedBills.map(bill => (
-                  <tr key={bill.id} style={{ opacity: statusCategory === 'Cancelled' ? 0.7 : 1 }}>
-                    <td className="ps-4 text-secondary small">
-                      {new Date(bill.sale_date).toLocaleDateString()}
+                  <tr key={bill.id} className={theme.text} style={{ opacity: statusCategory === 'Cancelled' ? 0.7 : 1 }}>
+                    <td className={`ps-4 small ${theme.subText}`}>
+                      {new Date(bill.created_at || bill.sale_date).toLocaleDateString()}
                     </td>
                     <td>
                       <span className="badge bg-light text-dark border font-monospace">#{bill.invoice_no}</span>
