@@ -1,0 +1,23 @@
+# dependencies
+node_modules/
+
+# react build
+build/
+
+# electron build output
+dist/
+out/
+
+# installers
+*.exe
+*.msi
+*.zip
+*.blockmap
+*.yml
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+
+# env
+.env

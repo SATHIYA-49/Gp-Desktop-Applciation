@@ -1,0 +1,120 @@
+/* --- APP.CSS (Theme Engine) --- */
+
+:root {
+  /* Default (Light Mode) Variables */
+  --bg-body: #f3f4f6;
+  --bg-card: #ffffff;
+  --bg-input: #ffffff;
+  --text-main: #111827;
+  --text-muted: #6b7280;
+  --border-color: #e5e7eb;
+  --table-head: #f9fafb;
+}
+
+[data-theme='dark'] {
+  /* Dark Mode Variables */
+  --bg-body: #0f172a;        /* Deep Navy */
+  --bg-card: #1f2937;        /* Dark Grey Blue */
+  --bg-input: #374151;       /* Input Fields */
+  --text-main: #f3f4f6;      /* Off-White Text */
+  --text-muted: #9ca3af;     /* Light Grey Text */
+  --border-color: #374151;   /* Dark Borders */
+  --table-head: #111827;     /* Dark Header */
+}
+
+/* 1. APPLY GLOBAL BACKGROUND & TEXT */
+body {
+  background-color: var(--bg-body) !important;
+  color: var(--text-main) !important;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 2. FORCE BOOTSTRAP TO OBEY DARK MODE */
+/* When data-theme='dark', override these Bootstrap classes */
+
+[data-theme='dark'] .bg-white,
+[data-theme='dark'] .bg-light {
+  background-color: var(--bg-card) !important;
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme='dark'] .text-dark {
+  color: var(--text-main) !important;
+}
+
+[data-theme='dark'] .text-secondary,
+[data-theme='dark'] .text-muted {
+  color: var(--text-muted) !important;
+}
+
+[data-theme='dark'] .border,
+[data-theme='dark'] .border-top,
+[data-theme='dark'] .border-bottom,
+[data-theme='dark'] .border-end,
+[data-theme='dark'] .border-start {
+  border-color: var(--border-color) !important;
+}
+
+/* 3. CARD STYLING */
+.card {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-main) !important;
+}
+.card-header, .card-footer {
+  background-color: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-main) !important;
+}
+
+/* 4. FORM INPUTS & SELECTS */
+.form-control, .form-select, .input-group-text {
+  background-color: var(--bg-input) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-main) !important;
+}
+.form-control::placeholder {
+  color: var(--text-muted) !important;
+  opacity: 0.7;
+}
+/* Fix Focus Glow */
+.form-control:focus, .form-select:focus {
+  border-color: #fbbf24 !important;
+  box-shadow: 0 0 0 0.25rem rgba(251, 191, 36, 0.25) !important;
+}
+
+/* 5. TABLES */
+.table {
+  color: var(--text-main) !important;
+  border-color: var(--border-color) !important;
+}
+.table thead th {
+  background-color: var(--table-head) !important;
+  color: var(--text-muted) !important;
+  border-bottom: 1px solid var(--border-color) !important;
+}
+.table td {
+  background-color: transparent !important; /* Let row color show through */
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-main) !important;
+}
+.table-hover tbody tr:hover td {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: #fff !important;
+}
+
+/* 6. MODALS */
+.modal-content {
+  background-color: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+}
+.modal-header, .modal-footer {
+  border-color: var(--border-color) !important;
+}
+.btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%); /* Make close 'X' white in dark mode */
+}
+[data-theme='light'] .btn-close {
+  filter: none;
+}
