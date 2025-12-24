@@ -27,28 +27,34 @@ function createWindow() {
 app.whenReady().then(() => {
   createWindow();
 
-  // 🔥 Auto update only in PROD
   if (app.isPackaged) {
     autoUpdater.checkForUpdates();
   }
 });
 
 /* =========================
-   AUTO UPDATE NOTIFICATIONS
+   AUTO UPDATE LOGIC
 ========================= */
 
-// Update available → PUSH notification
+// 1. Update available
 autoUpdater.on("update-available", () => {
-  new Notification({
-    title: "Golden Power ERP",
-    body: "New update available. Downloading in background..."
-  }).show();
+  if (win) win.webContents.send("update-status", "Update available. Downloading...");
+  new Notification({ title: "Golden Power ERP", body: "Downloading update..." }).show();
 });
 
-// Update downloaded → Ask restart
+// 2. PROGRESS BAR LOGIC (NEW) 🔥
+autoUpdater.on("download-progress", (progressObj) => {
+  if (win) {
+    // Send percentage (e.g., 45.5) to React
+    win.webContents.send("update-progress", progressObj.percent);
+  }
+});
+
+// 3. Update downloaded
 autoUpdater.on("update-downloaded", () => {
-  dialog
-    .showMessageBox({
+  if (win) win.webContents.send("update-status", "Download complete.");
+  
+  dialog.showMessageBox({
       type: "question",
       title: "Update Ready",
       message: "Update downloaded. Restart app now?",
@@ -61,7 +67,6 @@ autoUpdater.on("update-downloaded", () => {
     });
 });
 
-// Error handling
 autoUpdater.on("error", err => {
   console.error("Auto update error:", err);
 });

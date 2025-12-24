@@ -6,6 +6,7 @@ import './App.css';
 // --- COMPONENTS ---
 import Sidebar from './components/Sidebar';
 import ServiceNotifier from './components/ServiceNotifier';
+import UpdateProgress from './components/UpdateProgress';
 
 // --- PAGES ---
 import Customers from './pages/Customers';
@@ -56,6 +57,7 @@ const AppContent = () => {
         </div>
 
       </div>
+      <UpdateProgress />
     </Router>
   );
 };
