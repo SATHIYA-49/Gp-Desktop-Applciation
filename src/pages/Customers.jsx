@@ -21,7 +21,7 @@ const Customers = () => {
   const itemsPerPage = 10;
   const [viewLedgerId, setViewLedgerId] = useState(null);
   
-  // --- NEW: SEARCH STATE ---
+  // --- SEARCH STATE ---
   const [searchQuery, setSearchQuery] = useState('');
 
   // --- THEME ENGINE ---
@@ -31,6 +31,12 @@ const Customers = () => {
     subText: darkMode ? 'text-white-50' : 'text-muted',
     card: darkMode ? 'bg-dark border-secondary text-white' : 'bg-white border-0 shadow-sm text-dark',
     cardHeader: darkMode ? 'border-secondary' : 'border-bottom',
+    
+    // Search Bar Specific Themes
+    searchBg: darkMode ? 'bg-secondary' : 'bg-white',
+    searchText: darkMode ? 'text-white' : 'text-dark',
+    searchPlaceholder: darkMode ? 'placeholder-white-50' : 'placeholder-secondary',
+    
     input: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-light border-0 text-dark',
     inputIcon: darkMode ? 'bg-dark border-secondary text-white' : 'bg-light border-0 text-muted',
     trayBg: darkMode ? 'bg-secondary border-secondary' : 'bg-light border',
@@ -188,29 +194,39 @@ const Customers = () => {
       )}
 
       {/* 3. HEADER SECTION */}
-      <div className="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
+      <div className="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 gap-3">
         <div>
           <h3 className={`fw-bold m-0 ${theme.text}`}>Customer Management</h3>
           <p className={`small m-0 ${theme.subText}`}>Manage your client database.</p>
         </div>
         
         {/* RIGHT SIDE: SEARCH & ADD BUTTON */}
-        <div className="d-flex align-items-center gap-3 flex-wrap">
+        <div className="d-flex w-100 w-md-auto align-items-center gap-3 flex-column flex-md-row">
+            
             {/* SEARCH FIELD */}
-            <div className="input-group" style={{ maxWidth: '300px' }}>
-                <span className={`input-group-text border-0 rounded-start-pill ps-3 ${darkMode ? 'bg-secondary text-white' : 'bg-white text-secondary'}`}>
+            <div className={`input-group shadow-sm rounded-pill overflow-hidden ${theme.searchBg}`} style={{ maxWidth: '400px', width: '100%' }}>
+                <span className={`input-group-text border-0 ps-3 bg-transparent ${theme.searchText}`}>
                     <i className="bi bi-search"></i>
                 </span>
                 <input 
                     type="text" 
-                    className={`form-control border-0 rounded-end-pill py-2 ${darkMode ? 'bg-secondary text-white placeholder-white-50' : 'bg-white'}`} 
+                    className={`form-control border-0 shadow-none bg-transparent ${theme.searchText} ${theme.searchPlaceholder}`} 
                     placeholder="Search name or phone..." 
                     value={searchQuery}
                     onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                 />
+                {searchQuery && (
+                    <button 
+                        className={`btn border-0 bg-transparent ${theme.searchText}`} 
+                        onClick={() => {setSearchQuery(''); setCurrentPage(1);}}
+                        title="Clear search"
+                    >
+                        <i className="bi bi-x-lg"></i>
+                    </button>
+                )}
             </div>
 
-            <button className="btn btn-primary fw-bold px-4 rounded-pill shadow-sm d-flex align-items-center gap-2" onClick={() => setShowAddModal(true)}>
+            <button className="btn btn-primary fw-bold px-4 rounded-pill shadow-sm d-flex align-items-center gap-2 flex-shrink-0" onClick={() => setShowAddModal(true)}>
                 <i className="bi bi-plus-lg"></i> Add Client
             </button>
         </div>

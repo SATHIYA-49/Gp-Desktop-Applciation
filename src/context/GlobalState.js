@@ -5,7 +5,10 @@ export const GlobalContext = createContext();
 
 export const GlobalProvider = ({ children }) => {
   
-  // --- THEME STATE ---
+  // --- 1. LOADING STATE (NEW) ---
+  const [isLoading, setIsLoading] = useState(true);
+
+  // --- 2. THEME STATE ---
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem('theme') === 'dark';
@@ -21,34 +24,31 @@ export const GlobalProvider = ({ children }) => {
     });
   };
 
-  // --- SIDEBAR STATE ---
+  // --- 3. SIDEBAR STATE ---
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
-
   const openSidebar = () => setIsSidebarCollapsed(false);
   const closeSidebar = () => setIsSidebarCollapsed(true);
   const toggleSidebar = () => setIsSidebarCollapsed(prev => !prev);
 
-  // --- DATA STATES ---
-  // 1. People
+  // --- 4. DATA STATES ---
+  // People
   const [customers, setCustomers] = useState([]);
   
-  // 2. Inventory (New)
+  // Inventory
   const [products, setProducts] = useState([]);
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
 
-  // 3. Finance
+  // Finance
   const [billingHistory, setBillingHistory] = useState([]);
   const [debtors, setDebtors] = useState([]);
   const [reports, setReports] = useState([]);
 
-  // --- FETCHERS ---
+  // --- 5. DATA FETCHERS ---
   const loadCustomers = async () => { 
-    try { 
-      const res = await apiClient.get('/customers'); 
-      setCustomers(res.data); 
-    } catch(e) { console.error("Error loading customers:", e); } 
+    try { const res = await apiClient.get('/customers'); setCustomers(res.data); } 
+    catch(e) { console.error("Error loading customers:", e); } 
   };
   
   // Inventory Fetchers
@@ -60,26 +60,57 @@ export const GlobalProvider = ({ children }) => {
   // Finance Fetchers
   const loadBilling = async () => { try { const res = await apiClient.get('/billing/history'); setBillingHistory(res.data); } catch(e){} };
   const loadDebtors = async () => { try { const res = await apiClient.get('/billing/debtors'); setDebtors(res.data); } catch(e){} };
-  const loadReports = async () => { try { const res = await apiClient.get('/reports/payments'); setReports(res.data); } catch(e){} };
+  const loadReports = async () => { 
+    try { 
+        const res = await apiClient.get('/billing/report'); 
+        setReports(res.data); 
+    } catch(e){ console.error(e); } 
+  };
 
-  // Wrapper to load ALL Inventory data at once (useful for Inventory Page)
+  // Wrapper to load ALL Inventory data at once
   const loadInventoryData = async () => {
     await Promise.all([loadProducts(), loadBrands(), loadCategories(), loadSubCategories()]);
   };
 
-  // --- INIT ---
+  // --- 6. INITIALIZATION EFFECT (The Magic Part) ---
   useEffect(() => {
-    // Load critical app data on startup
-    loadCustomers();
-    loadInventoryData(); // Load inventory data immediately
-    loadBilling();
-    loadDebtors();
-    loadReports();
+    const initApp = async () => {
+        try {
+            console.log("🚀 App Initializing...");
+            
+            // Step A: Start the 2-second timer (for the animation)
+            const timerPromise = new Promise(resolve => setTimeout(resolve, 2000));
+
+            // Step B: Start fetching ALL data in parallel
+            const dataPromise = Promise.all([
+                loadCustomers(),
+                loadInventoryData(),
+                loadBilling(),
+                loadDebtors(),
+                loadReports()
+            ]);
+
+            // Step C: Wait for BOTH the Timer AND the Data to finish
+            await Promise.all([timerPromise, dataPromise]);
+
+            console.log("✅ Initialization Complete. Data Loaded.");
+            setIsLoading(false); // Hide Loading Screen, Show Dashboard
+
+        } catch (error) {
+            console.error("Initialization Failed:", error);
+            setIsLoading(false); // Stop loading even if error
+        }
+    };
+
+    initApp();
     // eslint-disable-next-line
   }, []);
 
   return (
     <GlobalContext.Provider value={{
+      // App Status
+      isLoading,
+
       // Theme & UI
       darkMode, toggleTheme,
       isSidebarCollapsed, toggleSidebar, openSidebar, closeSidebar,

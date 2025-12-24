@@ -4,7 +4,7 @@ import apiClient from '../api/client';
 import { useNavigate } from 'react-router-dom';
 
 const Billing = () => {
-  const { customers, products, billingHistory, loadBilling, loadDebtors, loadReports } = useContext(GlobalContext);
+  const { customers, products, billingHistory, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
   const navigate = useNavigate();
 
   // --- STATES ---
@@ -33,8 +33,8 @@ const Billing = () => {
   
   // Error & Success Messages
   const [errorMsg, setErrorMsg] = useState('');
-  const [paidError, setPaidError] = useState(''); // New state for payment validation
-  const [successMsg, setSuccessMsg] = useState(''); // New state for success alert
+  const [paidError, setPaidError] = useState(''); 
+  const [successMsg, setSuccessMsg] = useState(''); 
 
   // --- HELPERS ---
   const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
@@ -134,14 +134,14 @@ const Billing = () => {
       }
   };
 
-  // Calculate Balance (ensure it doesn't go below zero visually if error exists)
+  // Calculate Balance
   const balance = Math.max(0, grandTotal - paid);
 
   // --- CREATE INVOICE ---
   const handleSubmit = async () => {
     if (cart.length === 0) return alert("Cart is empty!");
     if (!custId) return alert("Select a customer.");
-    if (paid > grandTotal) return alert("Paid amount is greater than total!"); // Final check
+    if (paid > grandTotal) return alert("Paid amount is greater than total!"); 
     
     if (scheduleService && !serviceDate) return alert("Please select a Service Date or uncheck the schedule box.");
 
@@ -166,7 +166,7 @@ const Billing = () => {
       
       // Show Success Message
       setSuccessMsg("Bill Created Successfully!");
-      setTimeout(() => setSuccessMsg(''), 3000); // Hide after 3 seconds
+      setTimeout(() => setSuccessMsg(''), 3000); 
 
     } catch (err) { 
       alert("Error: " + (err.response?.data?.detail || "Failed")); 
@@ -186,7 +186,14 @@ const Billing = () => {
   };
 
   return (
-    <div className="container-fluid p-4">
+    <div 
+      className="container-fluid p-4 custom-scrollbar" 
+      style={{ 
+        height: '100vh', 
+        overflowY: 'auto', 
+        overflowX: 'hidden' 
+      }}
+    >
       
       {/* SUCCESS ALERT */}
       {successMsg && (
@@ -227,10 +234,10 @@ const Billing = () => {
 
                 <div className="col-md-7">
                   <div className="d-flex align-items-center mb-2">
-                     <div className="form-check form-switch">
+                      <div className="form-check form-switch">
                         <input className="form-check-input" type="checkbox" id="scheduleServiceCheck" checked={scheduleService} onChange={(e) => setScheduleService(e.target.checked)} style={{ cursor: 'pointer' }} />
                         <label className="form-check-label small fw-bold text-dark ms-2" htmlFor="scheduleServiceCheck">Schedule Service Task?</label>
-                     </div>
+                      </div>
                   </div>
                   {scheduleService && (
                       <div className="row g-2 animate__animated animate__fadeIn">
@@ -423,6 +430,37 @@ const Billing = () => {
           </div>
         </div>
       </div>
+
+      {/* --- CSS FOR TRANSPARENT SCROLLBAR --- */}
+      <style>
+        {`
+          /* For Webkit Browsers (Chrome, Edge, Safari) */
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 8px; /* Slim width */
+          }
+          
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent; /* Invisible track */
+          }
+          
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background-color: rgba(150, 150, 150, 0.3); /* Subtle semi-transparent grey */
+            border-radius: 20px; /* Rounded pill shape */
+            border: 2px solid transparent; /* Creates padding around thumb */
+            background-clip: content-box;
+          }
+
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(150, 150, 150, 0.6); /* Slightly darker on hover */
+          }
+
+          /* Hide scrollbar for Firefox but keep scroll */
+          .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(150, 150, 150, 0.3) transparent;
+          }
+        `}
+      </style>
     </div>
   );
 };

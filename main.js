@@ -1,6 +1,15 @@
-const { app, BrowserWindow, dialog, Notification } = require("electron");
+const { app, BrowserWindow, dialog, Notification, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
+
+// --- 1. SETUP LOGGING ---
+// This allows us to send text logs to the React Window
+function sendLog(message) {
+  console.log(`[Updater] ${message}`);
+  if (win) {
+    win.webContents.send("update-log", message);
+  }
+}
 
 let win;
 
@@ -22,53 +31,100 @@ function createWindow() {
   }
 
   win.on("closed", () => (win = null));
+
+  // --- 2. TRIGGER UPDATE CHECK ON LOAD (With Delay) ---
+  win.once('ready-to-show', () => {
+    if (app.isPackaged) {
+      // Wait 3 seconds for app to settle, then check
+      setTimeout(() => {
+        sendLog("Initializing update check...");
+        autoUpdater.checkForUpdates();
+      }, 3000);
+    } else {
+      sendLog("Dev Mode: Skipping update check.");
+    }
+  });
 }
 
 app.whenReady().then(() => {
   createWindow();
-
-  if (app.isPackaged) {
-    autoUpdater.checkForUpdates();
-  }
 });
 
 /* =========================
-   AUTO UPDATE LOGIC
+   REMOTE UPDATE CONTROL LOGIC
 ========================= */
 
-// 1. Update available
-autoUpdater.on("update-available", () => {
-  if (win) win.webContents.send("update-status", "Update available. Downloading...");
-  new Notification({ title: "Golden Power ERP", body: "Downloading update..." }).show();
+// Disable auto-download so we can prompt the user first
+autoUpdater.autoDownload = false;
+autoUpdater.autoInstallOnAppQuit = true;
+
+// A. CHECKING
+autoUpdater.on("checking-for-update", () => {
+  sendLog("Checking GitHub for releases...");
 });
 
-// 2. PROGRESS BAR LOGIC (NEW) 🔥
-autoUpdater.on("download-progress", (progressObj) => {
-  if (win) {
-    // Send percentage (e.g., 45.5) to React
-    win.webContents.send("update-progress", progressObj.percent);
+// B. UPDATE AVAILABLE (Remote Control Step)
+autoUpdater.on("update-available", (info) => {
+  sendLog(`Version ${info.version} found on GitHub!`);
+  
+  // Prompt User
+  dialog.showMessageBox(win, {
+    type: 'info',
+    title: 'New Update Found',
+    message: `A new version (${info.version}) is available.\n\nRelease Date: ${info.releaseDate}\n\nDo you want to download it now?`,
+    buttons: ['Yes, Download', 'No, Later']
+  }).then((result) => {
+    if (result.response === 0) {
+      sendLog("User accepted update. Starting download...");
+      autoUpdater.downloadUpdate(); // <--- Manually start download
+    } else {
+      sendLog("User declined update.");
+    }
+  });
+});
+
+// C. UPDATE NOT AVAILABLE
+autoUpdater.on("update-not-available", () => {
+  sendLog("App is up to date.");
+});
+
+// D. ERROR
+autoUpdater.on("error", (err) => {
+  sendLog(`Error: ${err.message}`);
+  // If signature error, helpful hint:
+  if(err.message.includes("signature")) {
+     sendLog("Signature Validation Failed. Ensure package.json has verifyUpdateCodeSignature: false");
   }
 });
 
-// 3. Update downloaded
-autoUpdater.on("update-downloaded", () => {
-  if (win) win.webContents.send("update-status", "Download complete.");
+// E. DOWNLOAD PROGRESS
+autoUpdater.on("download-progress", (progressObj) => {
+  const percent = Math.round(progressObj.percent);
+  // Send Log
+  sendLog(`Downloading: ${percent}% (${(progressObj.transferred / 1000000).toFixed(2)} MB / ${(progressObj.total / 1000000).toFixed(2)} MB)`);
   
-  dialog.showMessageBox({
+  // Send Progress Bar Data
+  if (win) win.webContents.send("update-progress", percent);
+});
+
+// F. UPDATE DOWNLOADED
+autoUpdater.on("update-downloaded", () => {
+  sendLog("Download complete. Verifying...");
+  
+  dialog.showMessageBox(win, {
       type: "question",
-      title: "Update Ready",
-      message: "Update downloaded. Restart app now?",
+      title: "Install Update",
+      message: "Update downloaded and ready. Restart the app now to apply?",
       buttons: ["Restart Now", "Later"]
     })
     .then(result => {
       if (result.response === 0) {
+        sendLog("Quitting to install...");
         autoUpdater.quitAndInstall();
+      } else {
+        sendLog("User postponed restart.");
       }
     });
-});
-
-autoUpdater.on("error", err => {
-  console.error("Auto update error:", err);
 });
 
 app.on("window-all-closed", () => {

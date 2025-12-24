@@ -130,7 +130,7 @@ const Sidebar = () => {
 
     icon: (isActive) => ({
       fontSize: '1.25rem',
-      minWidth: '40px', // ALIGNMENT FIX: Matches Brand Logo Width
+      minWidth: '40px', 
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -166,7 +166,6 @@ const Sidebar = () => {
     }),
 
     subLink: (isActive) => ({
-      // ALIGNMENT FIX: 20px (Pad) + 40px (Icon) + 10px (Gap) = 70px indent
       padding: '8px 12px 8px 70px', 
       fontSize: '0.85rem',
       color: isActive ? '#fbbf24' : (darkMode ? '#94a3b8' : '#6b7280'),
@@ -213,9 +212,21 @@ const Sidebar = () => {
       {/* NAVIGATION */}
       <ul className="nav flex-column mb-auto" style={styles.scrollArea}>
         
-        {/* 1. CUSTOMERS */}
+        {/* 1. DASHBOARD (NEW) */}
         <li style={styles.navItem}>
-          <NavLink to="/" style={({ isActive }) => styles.link(isActive)}>
+          <NavLink to="/dashboard" style={({ isActive }) => styles.link(isActive)}>
+            {({ isActive }) => (
+              <>
+                <i className="bi bi-grid-fill" style={styles.icon(isActive)}></i>
+                <span style={styles.linkLabel}>Dashboard</span>
+              </>
+            )}
+          </NavLink>
+        </li>
+
+        {/* 2. CUSTOMERS */}
+        <li style={styles.navItem}>
+          <NavLink to="/customers" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-people-fill" style={styles.icon(isActive)}></i>
@@ -225,7 +236,7 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 2. INVENTORY */}
+        {/* 3. INVENTORY */}
         <li style={styles.navItem}>
           <NavLink to="/inventory" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -237,7 +248,7 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 3. SERVICE MANAGEMENT */}
+        {/* 4. SERVICE MANAGEMENT */}
         <li style={styles.navItem}>
           <NavLink to="/services" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -249,7 +260,7 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 4. EMPLOYEE MANAGEMENT */}
+        {/* 5. EMPLOYEE MANAGEMENT */}
         <li style={styles.navItem}>
           <NavLink to="/employees" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -261,7 +272,7 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 5. BILLING (DROPDOWN) */}
+        {/* 6. BILLING (DROPDOWN) */}
         <li style={styles.navItem}>
           <div 
             style={styles.link(activeMenu === 'billing')} 
@@ -280,7 +291,7 @@ const Sidebar = () => {
           </div>
         </li>
 
-        {/* 6. ACCOUNTS */}
+        {/* 7. ACCOUNTS */}
         <li style={styles.navItem}>
           <NavLink to="/accounts" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -292,7 +303,7 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 7. REPORTS (DROPDOWN) */}
+        {/* 8. REPORTS (DROPDOWN) */}
         <li style={styles.navItem}>
           <div 
             style={styles.link(activeMenu === 'reports')} 
@@ -311,7 +322,7 @@ const Sidebar = () => {
           </div>
         </li>
 
-        {/* 8. SETTINGS */}
+        {/* 9. SETTINGS */}
         <li style={styles.navItem}>
           <NavLink to="/settings" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -324,8 +335,6 @@ const Sidebar = () => {
         </li>
 
       </ul>
-
-      
     </div>
   );
 };

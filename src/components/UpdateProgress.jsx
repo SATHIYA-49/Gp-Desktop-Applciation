@@ -2,42 +2,37 @@ import React, { useState, useEffect } from 'react';
 
 const UpdateProgress = () => {
   const [progress, setProgress] = useState(0);
-  const [status, setStatus] = useState('Initializing update...');
-  
-  // FIX: Use 'false' (lowercase) not 'True'
-  // Default is hidden (false) for production so it doesn't block the screen
+  const [status, setStatus] = useState('');
   const [isVisible, setIsVisible] = useState(false); 
 
   useEffect(() => {
-    // Only run if Electron API is available
-    if (window.electronAPI) {
+    // Check if Electron is available (via preload.js)
+    if (window.electron) {
       
-      // 1. Listen for Progress
-      window.electronAPI.onUpdateProgress((percent) => {
+      // 1. Listen for Progress (0-100)
+      window.electron.on('update-progress', (percent) => {
         setIsVisible(true);
         setProgress(Math.round(percent));
         
-        // Dynamic status based on percentage
         if (percent < 100) {
-            setStatus("Downloading update files...");
+            setStatus(`Downloading... ${Math.round(percent)}%`);
         } else {
             setStatus("Verifying & Installing...");
-            // Keep visible briefly to show completion before hiding/restarting
-            setTimeout(() => setIsVisible(false), 3000); 
+            // Keep visible briefly to show completion
+            setTimeout(() => setIsVisible(false), 4000); 
         }
       });
 
-      // 2. Listen for custom status messages from Main Process
-      window.electronAPI.onUpdateStatus((msg) => {
-        setStatus(msg);
-        setIsVisible(true);
+      // 2. Listen for Text Logs/Status
+      window.electron.on('update-log', (message) => {
+        // Only show log messages if the progress bar isn't active yet
+        // or update the status text
+        console.log("Updater Log:", message);
+        if (message.includes("Downloading")) {
+            setIsVisible(true);
+        }
       });
     }
-
-    // Cleanup listeners
-    return () => {
-      if (window.electronAPI) window.electronAPI.removeUpdateListeners();
-    };
   }, []);
 
   if (!isVisible) return null;
@@ -95,7 +90,7 @@ const UpdateProgress = () => {
 
             {/* Stats Row */}
             <div className="d-flex justify-content-between align-items-center mt-3">
-                <span className="small text-white-50 fw-medium">
+                <span className="small text-white-50 fw-medium text-truncate" style={{maxWidth: '80%'}}>
                     <i className="bi bi-hdd-network me-2"></i>{status}
                 </span>
                 <span className="h5 mb-0 fw-bold text-white">
