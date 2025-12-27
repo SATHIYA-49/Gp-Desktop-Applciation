@@ -1,22 +1,25 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electron', {
-  // Listen for events FROM Main Process (e.g. update-progress)
+  // --- 1. GENERIC LISTENER (Fixes "window.electron.on is not a function") ---
   on: (channel, func) => {
-    // Whitelist channels for security
-    const validChannels = ['update-status', 'update-progress', 'update-log'];
+    const validChannels = ['update-log', 'update-progress', 'update-status'];
     if (validChannels.includes(channel)) {
-      // Remove existing listeners to avoid duplicates
+      // Remove existing to prevent duplicates, then add
       ipcRenderer.removeAllListeners(channel);
       ipcRenderer.on(channel, (event, ...args) => func(...args));
     }
   },
-  
-  // Send events TO Main Process (optional, good for later)
+
+  // --- 2. GENERIC SENDER ---
   send: (channel, data) => {
-    const validChannels = ['app-version'];
+    const validChannels = ['manual-check-update', 'app-version'];
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     }
-  }
+  },
+
+  // --- 3. SPECIFIC METHODS (For newer components) ---
+  checkUpdate: () => ipcRenderer.send('manual-check-update'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version')
 });

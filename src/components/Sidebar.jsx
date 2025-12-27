@@ -36,15 +36,15 @@ const Sidebar = () => {
       zIndex: 1000,
       background: darkMode 
         ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' 
-        : 'linear-gradient(180deg, #ffffff 40%, #fffbeb 100%)',
-      boxShadow: isSidebarCollapsed ? 'none' : '4px 0 24px rgba(0,0,0,0.08)', 
-      borderRight: darkMode ? '1px solid #1e293b' : '1px solid rgba(251, 191, 36, 0.3)',
+        : 'linear-gradient(180deg, #ffffff 40%, #f8fafc 100%)',
+      boxShadow: isSidebarCollapsed ? 'none' : '4px 0 30px rgba(0,0,0,0.05)', 
+      borderRight: darkMode ? '1px solid #1e293b' : '1px solid rgba(0,0,0,0.05)',
       color: darkMode ? '#e2e8f0' : '#4b5563',
       display: 'flex',
       flexDirection: 'column',
       fontFamily: "'Inter', sans-serif",
-      transition: 'width 0.35s cubic-bezier(0.4, 0, 0.2, 1), background 0.3s ease',
-      overflowX: 'hidden',
+      transition: 'width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1)',
+      overflow: 'hidden', 
       whiteSpace: 'nowrap' 
     },
 
@@ -53,94 +53,87 @@ const Sidebar = () => {
       display: 'flex',
       alignItems: 'center',
       padding: '0 20px', 
-      borderBottom: darkMode ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(251, 191, 36, 0.2)',
-      marginBottom: '16px',
-      background: darkMode ? 'rgba(0,0,0,0.2)' : 'rgba(251, 191, 36, 0.05)',
-      transition: 'all 0.3s ease'
+      marginBottom: '10px',
+      flexShrink: 0 
     },
 
     brandLogo: {
       minWidth: '40px', 
       height: '40px',
-      background: 'linear-gradient(135deg, #fbbf24, #b45309)',
-      borderRadius: '10px',
+      background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+      borderRadius: '12px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       color: '#fff',
       fontWeight: '800',
       fontSize: '1.2rem',
-      boxShadow: '0 4px 6px rgba(251, 191, 36, 0.3)',
+      boxShadow: '0 8px 16px -4px rgba(245, 158, 11, 0.4)',
       zIndex: 2,
     },
 
     brandDetails: {
       opacity: isSidebarCollapsed ? 0 : 1,
-      transform: isSidebarCollapsed ? 'translateX(-10px)' : 'translateX(0)',
+      transform: isSidebarCollapsed ? 'translateX(-15px)' : 'translateX(0)',
       width: isSidebarCollapsed ? 0 : 'auto',
-      marginLeft: '12px',
-      transition: 'all 0.25s ease',
+      marginLeft: '14px',
+      transition: 'opacity 0.2s ease, transform 0.3s ease', 
       pointerEvents: isSidebarCollapsed ? 'none' : 'auto'
     },
 
-    brandText: {
-      background: 'linear-gradient(to right, #fbbf24, #d97706)',
-      WebkitBackgroundClip: 'text',
-      WebkitTextFillColor: 'transparent',
-      fontSize: '1.1rem',
-      fontWeight: '800',
-      textTransform: 'uppercase',
-      letterSpacing: '0.5px'
-    },
-
     scrollArea: {
-      flex: 1,
-      overflowY: 'auto',
+      flex: 1, 
+      overflowY: 'auto', 
       overflowX: 'hidden',
       paddingRight: '0px',
+      paddingTop: '10px',
+      display: 'block' // Ensures list behaves like a block
     },
 
+    // FIX: Force block display to prevent flex-row collision
     navItem: {
-      marginBottom: '4px',
-      padding: '0 12px', 
+      marginBottom: '6px',
+      padding: '0 16px',
+      display: 'block', 
+      width: '100%'
     },
 
     link: (isActive) => ({
       position: 'relative',
-      height: '48px',
+      height: '50px',
       color: isActive 
-        ? (darkMode ? '#fff' : '#111827') 
-        : (darkMode ? '#94a3b8' : '#6b7280'),
+        ? (darkMode ? '#fff' : '#0f172a') 
+        : (darkMode ? '#94a3b8' : '#64748b'),
       background: isActive 
-        ? 'linear-gradient(90deg, rgba(251, 191, 36, 0.15), rgba(251, 191, 36, 0.02))' 
+        ? (darkMode ? 'rgba(255,255,255,0.08)' : '#fff')
         : 'transparent',
-      borderLeft: isActive ? '4px solid #fbbf24' : '4px solid transparent',
-      borderRadius: '8px',
+      boxShadow: isActive && !darkMode ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
+      borderRadius: '12px',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'flex-start', 
-      paddingLeft: '20px', 
+      paddingLeft: isSidebarCollapsed ? '12px' : '16px', 
       paddingRight: '12px', 
       textDecoration: 'none',
       fontWeight: isActive ? '600' : '500',
-      transition: 'all 0.2s ease',
+      transition: 'all 0.25s ease',
       cursor: 'pointer',
       userSelect: 'none',
+      width: '100%' // Ensure full width
     }),
 
     icon: (isActive) => ({
       fontSize: '1.25rem',
-      minWidth: '40px', 
+      minWidth: '24px', 
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      color: isActive ? '#fbbf24' : (darkMode ? '#64748b' : '#9ca3af'),
-      filter: isActive ? 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.3))' : 'none',
-      transition: 'all 0.3s ease'
+      color: isActive ? '#f59e0b' : (darkMode ? '#64748b' : '#9ca3af'),
+      filter: isActive ? 'drop-shadow(0 0 8px rgba(245, 158, 11, 0.3))' : 'none',
+      transition: 'color 0.3s ease'
     }),
 
     linkLabel: {
-      marginLeft: '10px',
+      marginLeft: '14px',
       opacity: isSidebarCollapsed ? 0 : 1,
       width: isSidebarCollapsed ? 0 : 'auto', 
       transform: isSidebarCollapsed ? 'translateX(-10px)' : 'translateX(0)',
@@ -152,43 +145,32 @@ const Sidebar = () => {
       fontSize: '0.75rem',
       marginLeft: 'auto',
       opacity: isSidebarCollapsed ? 0 : 0.6,
-      transition: 'transform 0.3s, opacity 0.2s',
+      transition: 'transform 0.3s ease',
       transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)'
     }),
 
+    // SIMPLIFIED ANIMATION TO PREVENT CRASH
     subMenuContainer: (isOpen) => ({
-      maxHeight: (isOpen && !isSidebarCollapsed) ? '300px' : '0', 
+      height: (isOpen && !isSidebarCollapsed) ? 'auto' : '0',
+      maxHeight: (isOpen && !isSidebarCollapsed) ? '500px' : '0',
       opacity: (isOpen && !isSidebarCollapsed) ? 1 : 0,
       overflow: 'hidden',
-      transform: (isOpen && !isSidebarCollapsed) ? 'translateY(0)' : 'translateY(-5px)',
-      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-      marginBottom: (isOpen && !isSidebarCollapsed) ? '8px' : '0', 
+      transition: 'max-height 0.4s ease, opacity 0.3s ease', // Removed transform to fix stacking issues
+      marginBottom: (isOpen && !isSidebarCollapsed) ? '10px' : '0', 
     }),
 
     subLink: (isActive) => ({
-      padding: '8px 12px 8px 70px', 
-      fontSize: '0.85rem',
-      color: isActive ? '#fbbf24' : (darkMode ? '#94a3b8' : '#6b7280'),
+      padding: '10px 12px 10px 54px', 
+      fontSize: '0.9rem',
+      color: isActive ? '#f59e0b' : (darkMode ? '#94a3b8' : '#6b7280'),
       textDecoration: 'none',
       display: 'block',
       fontWeight: isActive ? '600' : '400',
       transition: 'all 0.2s ease',
       borderRadius: '8px',
-      background: isActive ? (darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)') : 'transparent',
-      margin: '2px 0'
+      background: isActive ? (darkMode ? 'rgba(245, 158, 11, 0.1)' : 'rgba(245, 158, 11, 0.05)') : 'transparent',
+      margin: '2px 0 2px 16px' 
     }),
-
-    footer: {
-      padding: '20px 0',
-      height: '80px',
-      display: 'flex',
-      alignItems: 'center',
-      paddingLeft: '20px', 
-      borderTop: darkMode ? '1px solid rgba(255,255,255,0.05)' : '1px solid rgba(251, 191, 36, 0.2)',
-      background: darkMode ? '#0b1120' : '#fffbeb',
-      transition: 'all 0.3s ease',
-      overflow: 'hidden'
-    }
   };
 
   return (
@@ -202,17 +184,18 @@ const Sidebar = () => {
       <div style={styles.brandContainer}>
         <div style={styles.brandLogo}>GP</div>
         <div style={styles.brandDetails}>
-            <div style={styles.brandText}>GOLDEN POWER</div>
-            <div style={{ fontSize: '0.65rem', letterSpacing: '2px', color: darkMode ? '#64748b' : '#9ca3af' }}>
+            <div style={{...styles.brandText, color: darkMode ? '#fff' : '#000'}}>GOLDEN POWER</div>
+            <div style={{ fontSize: '0.7rem', fontWeight: '500', color: '#f59e0b', marginTop: '-2px' }}>
                 ENTERPRISE
             </div>
         </div>
       </div>
 
       {/* NAVIGATION */}
-      <ul className="nav flex-column mb-auto" style={styles.scrollArea}>
+      {/* Removed 'nav' class to prevent Bootstrap interference */}
+      <ul className="list-unstyled mb-auto sidebar-scroll" style={styles.scrollArea}>
         
-        {/* 1. DASHBOARD (NEW) */}
+        {/* 1. DASHBOARD */}
         <li style={styles.navItem}>
           <NavLink to="/dashboard" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -273,14 +256,16 @@ const Sidebar = () => {
         </li>
 
         {/* 6. BILLING (DROPDOWN) */}
-        <li style={styles.navItem}>
-          <div 
-            style={styles.link(activeMenu === 'billing')} 
-            onClick={() => handleMenuClick('billing')}
-          >
-            <i className="bi bi-receipt" style={styles.icon(activeMenu === 'billing')}></i>
-            <span style={{...styles.linkLabel, flex: 1}}>Billing / POS</span>
-            <i className="bi bi-chevron-right" style={styles.arrow(activeMenu === 'billing')}></i>
+        <li style={{...styles.navItem, padding: 0}}>
+          <div style={{padding: '0 16px'}}>
+            <div 
+                style={styles.link(activeMenu === 'billing')} 
+                onClick={() => handleMenuClick('billing')}
+            >
+                <i className="bi bi-receipt" style={styles.icon(activeMenu === 'billing')}></i>
+                <span style={{...styles.linkLabel, flex: 1}}>Billing / POS</span>
+                <i className="bi bi-chevron-right" style={styles.arrow(activeMenu === 'billing')}></i>
+            </div>
           </div>
 
           <div style={styles.subMenuContainer(activeMenu === 'billing')}>
@@ -304,19 +289,22 @@ const Sidebar = () => {
         </li>
 
         {/* 8. REPORTS (DROPDOWN) */}
-        <li style={styles.navItem}>
-          <div 
-            style={styles.link(activeMenu === 'reports')} 
-            onClick={() => handleMenuClick('reports')}
-          >
-            <i className="bi bi-bar-chart-fill" style={styles.icon(activeMenu === 'reports')}></i>
-            <span style={{...styles.linkLabel, flex: 1}}>Reports</span>
-            <i className="bi bi-chevron-right" style={styles.arrow(activeMenu === 'reports')}></i>
+        <li style={{...styles.navItem, padding: 0}}>
+          <div style={{padding: '0 16px'}}>
+            <div 
+                style={styles.link(activeMenu === 'reports')} 
+                onClick={() => handleMenuClick('reports')}
+            >
+                <i className="bi bi-bar-chart-fill" style={styles.icon(activeMenu === 'reports')}></i>
+                <span style={{...styles.linkLabel, flex: 1}}>Reports</span>
+                <i className="bi bi-chevron-right" style={styles.arrow(activeMenu === 'reports')}></i>
+            </div>
           </div>
 
           <div style={styles.subMenuContainer(activeMenu === 'reports')}>
             <div className="d-flex flex-column">
               <NavLink to="/reports/financial" style={({ isActive }) => styles.subLink(isActive)}>Financial Report</NavLink>
+              <NavLink to="/reports/inventory" style={({ isActive }) => styles.subLink(isActive)}>Inventory Report</NavLink>
               <NavLink to="/reports/service" style={({ isActive }) => styles.subLink(isActive)}>Service Report</NavLink>
             </div>
           </div>
@@ -335,6 +323,19 @@ const Sidebar = () => {
         </li>
 
       </ul>
+
+      {/* --- INJECT CSS TO HIDE SCROLLBAR --- */}
+      <style>
+        {`
+          .sidebar-scroll::-webkit-scrollbar {
+            display: none;
+          }
+          .sidebar-scroll {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+        `}
+      </style>
     </div>
   );
 };

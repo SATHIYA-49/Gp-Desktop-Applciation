@@ -1,25 +1,132 @@
-import React, { useContext, useState} from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import { GlobalContext } from '../context/GlobalState';
 import apiClient from '../api/client';
-import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2'; 
 
+// ==========================================
+// 1. REUSABLE SEARCHABLE SELECT COMPONENT (FIXED)
+// ==========================================
+const SearchableSelect = ({ options, value, onChange, placeholder, label, theme, darkMode }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [search, setSearch] = useState('');
+    const wrapperRef = useRef(null);
+
+    // Find the currently selected object to display its label
+    const selectedItem = options.find(opt => opt.value === value);
+
+    // Filter options based on search text
+    const filteredOptions = options.filter(opt => 
+        opt.label.toLowerCase().includes(search.toLowerCase()) || 
+        opt.subLabel?.toLowerCase().includes(search.toLowerCase())
+    );
+
+    // Close dropdown if clicked outside
+    useEffect(() => {
+        function handleClickOutside(event) {
+            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+                setIsOpen(false);
+                setSearch(''); // Reset search on close
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, [wrapperRef]);
+
+    return (
+        <div className="mb-1" ref={wrapperRef}>
+            <label className={`small fw-bold mb-1 ${theme.subText}`}>{label}</label>
+            <div className="position-relative">
+                {/* Input Field Wrapper */}
+                <div 
+                    className={`input-group ${theme.input} border rounded overflow-hidden`} 
+                    onClick={() => setIsOpen(!isOpen)} // Toggle when clicking the arrow/container
+                    style={{cursor: 'text'}}
+                >
+                    <input 
+                        type="text" 
+                        className={`form-control border-0 shadow-none ${theme.input}`} 
+                        placeholder={selectedItem ? selectedItem.label : placeholder}
+                        value={isOpen ? search : (selectedItem ? selectedItem.label : '')}
+                        
+                        // --- BUG FIX: STOP PROPAGATION ---
+                        onClick={(e) => {
+                            e.stopPropagation(); // Stop click from bubbling to parent (which toggles close)
+                            setIsOpen(true);     // Force open
+                        }}
+                        
+                        onChange={(e) => { setSearch(e.target.value); setIsOpen(true); }}
+                        onFocus={() => setIsOpen(true)}
+                        style={{backgroundColor: 'transparent'}}
+                    />
+                    <span className={`input-group-text border-0 bg-transparent ${theme.subText}`}>
+                        <i className={`bi bi-chevron-${isOpen ? 'up' : 'down'}`}></i>
+                    </span>
+                </div>
+
+                {/* Dropdown List */}
+                {isOpen && (
+                    <div 
+                        className="position-absolute w-100 shadow-lg rounded mt-1 overflow-auto custom-scrollbar" 
+                        style={{
+                            maxHeight: '220px', 
+                            zIndex: 1050, 
+                            top: '100%', 
+                            backgroundColor: darkMode ? '#1e293b' : '#fff', 
+                            border: darkMode ? '1px solid #475569' : '1px solid #dee2e6'
+                        }}
+                    >
+                        {filteredOptions.length > 0 ? (
+                            filteredOptions.map(opt => (
+                                <div 
+                                    key={opt.value} 
+                                    className={`p-2 border-bottom ${theme.text}`}
+                                    style={{
+                                        cursor: 'pointer', 
+                                        borderColor: darkMode ? '#334155' : '#f1f5f9',
+                                        backgroundColor: opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'
+                                    }}
+                                    onMouseDown={() => {
+                                        onChange(opt.value); // Pass ID back to parent
+                                        setIsOpen(false);
+                                        setSearch('');
+                                    }}
+                                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = darkMode ? '#334155' : '#f8f9fa'}
+                                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'}
+                                >
+                                    <div className="fw-bold small">{opt.label}</div>
+                                    {opt.subLabel && <div style={{fontSize: '0.7rem'}} className={theme.subText}>{opt.subLabel}</div>}
+                                </div>
+                            ))
+                        ) : (
+                            <div className={`p-3 text-center small ${theme.subText}`}>No results found</div>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+
+// ==========================================
+// 2. MAIN BILLING COMPONENT
+// ==========================================
 const Billing = () => {
   const { customers, products, billingHistory, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
-  const navigate = useNavigate();
 
   // --- STATES ---
   const [custId, setCustId] = useState('');
   
-  // --- SERVICE SCHEDULING STATES ---
+  // Service States
   const [scheduleService, setScheduleService] = useState(false);
   const [serviceDate, setServiceDate] = useState('');
   const [serviceType, setServiceType] = useState('Installation');
 
-  // Cart Item States
+  // Cart States
   const [prodId, setProdId] = useState('');
   const [qty, setQty] = useState(1);
   const [price, setPrice] = useState(0);       
-  const [discount, setDiscount] = useState(0); 
+  const [discount, setDiscount] = useState('');
   const [applyDiscount, setApplyDiscount] = useState(false);
   
   // Warranty States
@@ -27,19 +134,46 @@ const Billing = () => {
   const [warrantyFile, setWarrantyFile] = useState(null); 
 
   const [cart, setCart] = useState([]);
-  const [paid, setPaid] = useState(0);
+  const [paid, setPaid] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   
-  // Error & Success Messages
+  // Messages
   const [errorMsg, setErrorMsg] = useState('');
   const [paidError, setPaidError] = useState(''); 
-  const [successMsg, setSuccessMsg] = useState(''); 
+
+  // --- THEME ENGINE ---
+  const theme = {
+    container: darkMode ? 'bg-dark' : 'bg-light',
+    text: darkMode ? 'text-white' : 'text-dark',
+    subText: darkMode ? 'text-white-50' : 'text-secondary',
+    card: darkMode ? 'bg-dark border-secondary text-white' : 'bg-white border-0 shadow-sm',
+    cardHeader: darkMode ? 'bg-dark border-secondary' : 'bg-white border-0',
+    input: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-white border-light',
+    inputReadOnly: darkMode ? 'bg-dark text-white-50 border-secondary' : 'bg-light text-dark',
+    inputGroupText: darkMode ? 'bg-dark text-white border-secondary' : 'bg-light text-dark',
+    tableHead: darkMode ? 'table-dark' : 'table-light',
+    paymentBox: darkMode ? 'bg-dark border-secondary' : 'bg-light border',
+    listGroupItem: darkMode ? 'bg-dark text-white border-secondary' : 'bg-white text-dark',
+    badge: darkMode ? 'bg-secondary text-white' : 'bg-light text-dark'
+  };
+
+  // --- PREPARE DATA FOR SEARCH COMPONENT ---
+  const customerOptions = customers.map(c => ({
+      value: c.id,
+      label: c.name,
+      subLabel: c.phone
+  }));
+
+  const productOptions = products.map(p => ({
+      value: p.id,
+      label: p.name,
+      subLabel: `Stock: ${p.stock_quantity} | ₹${p.sell_price}`
+  }));
 
   // --- HELPERS ---
   const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
-  // --- FILTER: GET ONLY TODAY'S BILLS ---
   const getTodayStr = () => {
     const d = new Date();
     const offset = d.getTimezoneOffset();
@@ -53,21 +187,15 @@ const Billing = () => {
   });
 
   // --- HANDLERS ---
-  const setReminder = (days) => {
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    const formatted = date.toISOString().split('T')[0];
-    setServiceDate(formatted);
-  };
-
-  const handleProductChange = (e) => {
-    const pid = e.target.value;
-    setProdId(pid);
-    const p = products.find(i => i.id === pid);
+  
+  // New Handler for Searchable Product Select
+  const handleProductSelect = (selectedId) => {
+    setProdId(selectedId);
+    const p = products.find(i => i.id === selectedId);
     if (p) { 
       setSelectedProduct(p); 
       setPrice(p.sell_price); 
-      setDiscount(0); 
+      setDiscount(''); 
       setQty(1); 
       setHasWarranty(false); 
       setWarrantyFile(null); 
@@ -78,12 +206,32 @@ const Billing = () => {
     }
   };
 
+  const handleQtyChange = (val) => {
+    if (val === '' || isNaN(val)) {
+        setQty('');
+        return;
+    }
+    const num = parseInt(val);
+    if (num > 0) setQty(num);
+  };
+
+  const incrementQty = () => setQty((prev) => (prev ? parseInt(prev) + 1 : 1));
+  const decrementQty = () => setQty((prev) => (prev > 1 ? parseInt(prev) - 1 : 1));
+
+  const handleDiscountChange = (e) => {
+    const val = e.target.value;
+    if (val === '' || val < 0) {
+        setDiscount('');
+    } else {
+        setDiscount(parseFloat(val));
+    }
+  };
+
   const addToCart = (e) => {
     e.preventDefault();
     if (!selectedProduct) return;
     
-    // --- STOCK VALIDATION ---
-    const requestedQty = parseInt(qty);
+    const requestedQty = parseInt(qty) || 1;
     const currentStock = selectedProduct.stock_quantity || 0; 
 
     if (requestedQty > currentStock) {
@@ -94,7 +242,7 @@ const Billing = () => {
       return setErrorMsg("Please upload the Warranty Card image.");
     }
 
-    const finalDiscount = applyDiscount ? parseFloat(discount) : 0;
+    const finalDiscount = applyDiscount ? (parseFloat(discount) || 0) : 0;
     const finalUnitPrice = price - finalDiscount;
     
     if (finalUnitPrice < selectedProduct.net_price) return setErrorMsg(`Price below Net Price (${formatINR(selectedProduct.net_price)})`);
@@ -113,7 +261,7 @@ const Billing = () => {
     };
 
     setCart([...cart, newItem]);
-    setProdId(''); setQty(1); setPrice(0); setDiscount(0); 
+    setProdId(''); setQty(1); setPrice(0); setDiscount(''); 
     setSelectedProduct(null); setErrorMsg('');
     setHasWarranty(false); setWarrantyFile(null); 
   };
@@ -122,28 +270,30 @@ const Billing = () => {
 
   const grandTotal = cart.reduce((acc, item) => acc + item.total, 0);
   
-  // --- PAID AMOUNT HANDLER & VALIDATION ---
   const handlePaidChange = (e) => {
-      const val = parseFloat(e.target.value) || 0;
-      setPaid(val);
-      
-      if (val > grandTotal) {
+      const val = e.target.value;
+      if(val === '') {
+        setPaid('');
+        setPaidError('');
+        return;
+      }
+      const numVal = parseFloat(val);
+      setPaid(numVal);
+      if (numVal > grandTotal) {
           setPaidError(`Paid amount cannot exceed Total (${formatINR(grandTotal)})`);
       } else {
           setPaidError('');
       }
   };
 
-  // Calculate Balance
-  const balance = Math.max(0, grandTotal - paid);
+  const balance = Math.max(0, grandTotal - (parseFloat(paid) || 0));
 
-  // --- CREATE INVOICE ---
   const handleSubmit = async () => {
-    if (cart.length === 0) return alert("Cart is empty!");
-    if (!custId) return alert("Select a customer.");
-    if (paid > grandTotal) return alert("Paid amount is greater than total!"); 
+    if (cart.length === 0) return Swal.fire('Error', "Cart is empty!", 'warning');
+    if (!custId) return Swal.fire('Error', "Select a customer.", 'warning');
+    if ((parseFloat(paid) || 0) > grandTotal) return Swal.fire('Error', "Paid amount is greater than total!", 'error'); 
     
-    if (scheduleService && !serviceDate) return alert("Please select a Service Date or uncheck the schedule box.");
+    if (scheduleService && !serviceDate) return Swal.fire('Error', "Please select a Service Date.", 'warning');
 
     setIsSubmitting(true);
     try {
@@ -158,193 +308,235 @@ const Billing = () => {
       await apiClient.post('/billing/create', billData);
       
       loadBilling(); loadDebtors(); loadReports();
-      
-      // Reset Form
-      setCart([]); setPaid(0); setCustId(''); 
+      setCart([]); setPaid(''); setCustId(''); 
       setScheduleService(false); setServiceDate(''); setServiceType('Installation');
       setPaidError('');
       
-      // Show Success Message
-      setSuccessMsg("Bill Created Successfully!");
-      setTimeout(() => setSuccessMsg(''), 3000); 
+      Swal.fire({
+          icon: 'success',
+          title: 'Invoice Created!',
+          text: 'Bill saved successfully.',
+          background: darkMode ? '#1e293b' : '#fff',
+          color: darkMode ? '#fff' : '#545454',
+          timer: 2000,
+          showConfirmButton: false
+      });
 
     } catch (err) { 
-      alert("Error: " + (err.response?.data?.detail || "Failed")); 
+      Swal.fire({
+          icon: 'error',
+          title: 'Error',
+          text: err.response?.data?.detail || "Failed",
+          background: darkMode ? '#1e293b' : '#fff',
+          color: darkMode ? '#fff' : '#545454',
+      });
     } finally { 
       setIsSubmitting(false); 
     }
   };
 
   const toggleStatus = async (saleId) => {
-    if(!window.confirm("Change bill status? (Cancel/Accept)")) return;
-    try {
-      await apiClient.put(`/billing/${saleId}/status`);
-      loadBilling(); 
-    } catch (err) {
-      alert("Error updating status");
+    const result = await Swal.fire({
+        title: 'Change Status?',
+        text: "Toggle between Accepted/Cancelled",
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, change it',
+        background: darkMode ? '#1e293b' : '#fff',
+        color: darkMode ? '#fff' : '#545454',
+    });
+
+    if(result.isConfirmed) {
+        try {
+            await apiClient.put(`/billing/${saleId}/status`);
+            loadBilling(); 
+            Swal.fire({
+                title: 'Updated',
+                text: 'Status changed.',
+                icon: 'success',
+                background: darkMode ? '#1e293b' : '#fff',
+                color: darkMode ? '#fff' : '#545454',
+            });
+        } catch (err) {
+            Swal.fire('Error', 'Failed to update status', 'error');
+        }
     }
   };
 
-  return (
-    <div 
-      className="container-fluid p-4 custom-scrollbar" 
-      style={{ 
-        height: '100vh', 
-        overflowY: 'auto', 
-        overflowX: 'hidden' 
-      }}
-    >
-      
-      {/* SUCCESS ALERT */}
-      {successMsg && (
-        <div className="alert alert-success d-flex align-items-center shadow-sm mb-4 animate__animated animate__fadeInDown" role="alert">
-            <i className="bi bi-check-circle-fill fs-4 me-3"></i>
-            <div>
-                <strong>Success!</strong> {successMsg}
-            </div>
-            <button type="button" className="btn-close ms-auto" onClick={() => setSuccessMsg('')}></button>
-        </div>
-      )}
+  const setReminder = (days) => {
+    const date = new Date();
+    date.setDate(date.getDate() + days);
+    setServiceDate(date.toISOString().split('T')[0]);
+  };
 
+  return (
+    <div className={`container-fluid p-4 custom-scrollbar`} style={{ height: '100vh', overflowY: 'auto', overflowX: 'hidden', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa' }}>
+      
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h3 className="fw-bold m-0">Billing & Invoicing</h3>
-          <p className="text-secondary small m-0">Multi-product system.</p>
+          <h3 className={`fw-bold m-0 ${theme.text}`}>Billing & Invoicing</h3>
+          <p className={`small m-0 ${theme.subText}`}>Create new sales and manage invoices.</p>
         </div>
       </div>
 
       <div className="row g-4">
         {/* LEFT: INVOICE BUILDER */}
         <div className="col-lg-8">
-          <div className="card shadow-sm h-100">
-            <div className="card-header border-0 pt-4 pb-0 bg-white">
-              <h5 className="fw-bold m-0"><i className="bi bi-cart-plus me-2 text-warning"></i>Create Bill</h5>
+          <div className={`card h-100 ${theme.card}`}>
+            <div className={`card-header pt-4 pb-0 ${theme.cardHeader}`}>
+              <h5 className={`fw-bold m-0 ${theme.text}`}><i className="bi bi-receipt me-2 text-primary"></i>New Invoice</h5>
             </div>
             <div className="card-body p-4">
               
-              {/* CUSTOMER & SERVICE SECTION */}
-              <div className="row g-3 mb-4 p-3 bg-light rounded border border-dashed">
-                <div className="col-md-5">
-                  <label className="small fw-bold text-secondary mb-1">Customer</label>
-                  <select className="form-select" value={custId} onChange={(e) => setCustId(e.target.value)}>
-                    <option value="">Select...</option>
-                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+              {/* 1. SEARCHABLE CUSTOMER SELECTION */}
+              <div className="row g-3 mb-4">
+                <div className="col-md-6">
+                  <SearchableSelect 
+                    label="Select Customer"
+                    placeholder="Search name or phone..."
+                    options={customerOptions}
+                    value={custId}
+                    onChange={setCustId}
+                    theme={theme}
+                    darkMode={darkMode}
+                  />
                 </div>
-
-                <div className="col-md-7">
-                  <div className="d-flex align-items-center mb-2">
-                      <div className="form-check form-switch">
-                        <input className="form-check-input" type="checkbox" id="scheduleServiceCheck" checked={scheduleService} onChange={(e) => setScheduleService(e.target.checked)} style={{ cursor: 'pointer' }} />
-                        <label className="form-check-label small fw-bold text-dark ms-2" htmlFor="scheduleServiceCheck">Schedule Service Task?</label>
-                      </div>
-                  </div>
-                  {scheduleService && (
-                      <div className="row g-2 animate__animated animate__fadeIn">
-                          <div className="col-6">
-                              <label className="small fw-bold text-muted">Service Date</label>
-                              <input type="date" className="form-control form-control-sm" value={serviceDate} onChange={(e) => setServiceDate(e.target.value)} />
-                          </div>
-                          <div className="col-6">
-                              <label className="small fw-bold text-muted">Task Type</label>
-                              <select className="form-select form-select-sm" value={serviceType} onChange={(e) => setServiceType(e.target.value)}>
-                                  <option value="Installation">Installation</option>
-                                  <option value="General Service">General Service</option>
-                                  <option value="Repair">Repair</option>
-                                  <option value="Inspection">Inspection</option>
-                              </select>
-                          </div>
-                          <div className="col-12 d-flex gap-1 mt-1">
-                            <button type="button" onClick={() => setReminder(1)} className="btn btn-outline-secondary btn-sm flex-fill py-0" style={{fontSize: '0.7rem'}}>Tomorrow</button>
-                            <button type="button" onClick={() => setReminder(30)} className="btn btn-outline-secondary btn-sm flex-fill py-0" style={{fontSize: '0.7rem'}}>+30 Days</button>
-                            <button type="button" onClick={() => setReminder(90)} className="btn btn-outline-secondary btn-sm flex-fill py-0" style={{fontSize: '0.7rem'}}>+90 Days</button>
-                          </div>
-                      </div>
-                  )}
+                
+                {/* SERVICE SCHEDULER TOGGLE */}
+                <div className="col-md-6 d-flex align-items-center pt-2">
+                    <div className="form-check form-switch ps-0 mt-3">
+                        <label className={`form-check-label fw-bold ms-5 ${theme.text}`} htmlFor="serviceToggle">Schedule Service?</label>
+                        <input className="form-check-input ms-2" type="checkbox" id="serviceToggle" checked={scheduleService} onChange={e => setScheduleService(e.target.checked)} style={{transform: 'scale(1.2)'}}/>
+                    </div>
                 </div>
               </div>
 
-              {/* ADD ITEM FORM */}
+              {/* 2. OPTIONAL SERVICE DETAILS */}
+              {scheduleService && (
+                   <div className={`p-3 rounded border border-dashed mb-4 animate__animated animate__fadeIn ${darkMode ? 'border-secondary' : 'bg-light'}`}>
+                      <div className="row g-3">
+                          <div className="col-md-6">
+                              <label className={`small fw-bold ${theme.subText}`}>Service Date</label>
+                              <div className="input-group">
+                                  <input type="date" className={`form-control ${theme.input}`} value={serviceDate} onChange={e => setServiceDate(e.target.value)} />
+                                  <button className={`btn small ${darkMode ? 'btn-outline-light' : 'btn-outline-secondary'}`} type="button" onClick={() => setReminder(90)}>+3M</button>
+                              </div>
+                          </div>
+                          <div className="col-md-6">
+                              <label className={`small fw-bold ${theme.subText}`}>Task Type</label>
+                              <select className={`form-select ${theme.input}`} value={serviceType} onChange={e => setServiceType(e.target.value)}>
+                                  <option value="Installation">Installation</option>
+                                  <option value="General Service">General Service</option>
+                                  <option value="Repair">Repair</option>
+                              </select>
+                          </div>
+                      </div>
+                   </div>
+              )}
+
+              <hr className={`opacity-25 my-4 ${darkMode ? 'text-white' : 'text-muted'}`}/>
+
+              {/* 3. ADD PRODUCTS FORM */}
               <form onSubmit={addToCart} className="mb-4">
-                <div className="d-flex justify-content-end mb-2">
-                  <div className="form-check form-switch">
-                    <input className="form-check-input" type="checkbox" id="discountSwitch" checked={applyDiscount} onChange={() => setApplyDiscount(!applyDiscount)} style={{ cursor: 'pointer' }} />
-                    <label className="form-check-label small fw-bold text-secondary" htmlFor="discountSwitch">Apply Discount?</label>
-                  </div>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                    <h6 className={`fw-bold m-0 ${theme.text}`}>Add Items</h6>
+                    <div className="form-check form-switch">
+                        <input className="form-check-input" type="checkbox" id="discSwitch" checked={applyDiscount} onChange={() => setApplyDiscount(!applyDiscount)} />
+                        <label className={`form-check-label small ${theme.subText}`} htmlFor="discSwitch">Enable Discount</label>
+                    </div>
                 </div>
 
                 <div className="row g-3 align-items-end">
-                  <div className="col-md-5">
-                    <label className="small fw-bold text-muted mb-1">Product</label>
-                    <select className="form-select" value={prodId} onChange={handleProductChange} required>
-                      <option value="">Choose...</option>
-                      {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
+                  
+                  {/* SEARCHABLE PRODUCT SELECT */}
+                  <div className="col-md-4">
+                    <SearchableSelect 
+                        label="Product"
+                        placeholder="Search product..."
+                        options={productOptions}
+                        value={prodId}
+                        onChange={handleProductSelect}
+                        theme={theme}
+                        darkMode={darkMode}
+                    />
+                    {selectedProduct && <div className={`small mt-1 ${theme.subText}`}>Stock: {selectedProduct.stock_quantity} | Net: ₹{selectedProduct.net_price}</div>}
                   </div>
                   
-                  {/* PRICE & STOCK DISPLAY */}
+                  {/* Price (Read Only) */}
                   <div className="col-md-2">
-                    <div className="d-flex justify-content-between">
-                        <label className="small fw-bold text-muted mb-1">MRP</label>
-                        {selectedProduct && (
-                            <span className="badge bg-light text-dark border small" style={{fontSize: '0.65rem'}}>
-                                Stock: {selectedProduct.stock_quantity || 0}
-                            </span>
-                        )}
+                    <label className={`small fw-bold mb-1 ${theme.subText}`}>MRP</label>
+                    <div className="input-group">
+                        <span className={`input-group-text border-end-0 ${theme.inputGroupText}`}>₹</span>
+                        <input type="text" className={`form-control border-start-0 fw-bold ${theme.inputReadOnly}`} value={price} readOnly />
                     </div>
-                    <input type="text" className="form-control bg-white text-secondary" value={price} readOnly />
                   </div>
 
+                  {/* Discount */}
                   {applyDiscount && (
-                    <div className="col-md-2">
-                      <label className="small fw-bold text-muted mb-1">Discount</label>
-                      <input type="number" className="form-control border-warning" value={discount} onChange={e => setDiscount(e.target.value)} min="0" placeholder="0" />
+                    <div className="col-md-2 animate__animated animate__fadeIn">
+                      <label className={`small fw-bold mb-1 ${theme.subText}`}>Discount</label>
+                      <div className="input-group">
+                          <span className={`input-group-text ${theme.inputGroupText}`}>₹</span>
+                          <input type="number" className={`form-control ${theme.input}`} value={discount} onChange={handleDiscountChange} placeholder="0" />
+                      </div>
                     </div>
                   )}
+
+                  {/* Quantity Stepper */}
                   <div className="col-md-2">
-                    <label className="small fw-bold text-muted mb-1">Qty</label>
-                    <input type="number" className="form-control fw-bold" value={qty} onChange={e => setQty(e.target.value)} min="1" required />
+                    <label className={`small fw-bold mb-1 ${theme.subText}`}>Qty</label>
+                    <div className="input-group">
+                        <button type="button" className={`btn px-2 ${darkMode ? 'btn-outline-light' : 'btn-outline-secondary'}`} onClick={decrementQty}>-</button>
+                        <input type="number" className={`form-control text-center px-1 ${theme.input}`} value={qty} onChange={(e) => handleQtyChange(e.target.value)} min="1" required />
+                        <button type="button" className={`btn px-2 ${darkMode ? 'btn-outline-light' : 'btn-outline-secondary'}`} onClick={incrementQty}>+</button>
+                    </div>
                   </div>
-                  <div className="col-md-3">
-                    <button className="btn btn-warning w-100 fw-bold text-dark" disabled={!selectedProduct}><i className="bi bi-plus-lg"></i> Add</button>
+
+                  {/* Add Button */}
+                  <div className="col-md-2">
+                    <button className="btn btn-primary w-100 fw-bold" disabled={!selectedProduct}>
+                        <i className="bi bi-plus-lg"></i> Add
+                    </button>
                   </div>
                 </div>
 
+                {/* Warranty Upload */}
                 {selectedProduct && (
-                    <div className="mt-3 p-2 border rounded bg-light">
-                        <div className="form-check">
-                            <input className="form-check-input" type="checkbox" id="warrantyCheck" checked={hasWarranty} onChange={(e) => setHasWarranty(e.target.checked)} />
-                            <label className="form-check-label small fw-bold text-dark" htmlFor="warrantyCheck">Upload Warranty Card?</label>
+                    <div className={`mt-3 p-2 border rounded d-flex align-items-center gap-3 ${darkMode ? 'border-secondary' : 'bg-light'}`}>
+                        <div className="form-check mb-0">
+                            <input className="form-check-input" type="checkbox" id="warrCheck" checked={hasWarranty} onChange={e => setHasWarranty(e.target.checked)} />
+                            <label className={`form-check-label small fw-bold ${theme.text}`} htmlFor="warrCheck">Has Warranty?</label>
                         </div>
                         {hasWarranty && (
-                            <div className="mt-2">
-                                <input type="file" className="form-control form-control-sm" accept="image/*" onChange={(e) => setWarrantyFile(e.target.files[0])} required={hasWarranty} />
-                            </div>
+                            <input type="file" className={`form-control form-control-sm w-auto ${theme.input}`} accept="image/*" onChange={e => setWarrantyFile(e.target.files[0])} />
                         )}
                     </div>
                 )}
                 
-                {errorMsg && <div className="text-danger small fw-bold mt-2 animate__animated animate__shakeX">{errorMsg}</div>}
+                {errorMsg && <div className="alert alert-danger py-1 px-2 mt-2 small"><i className="bi bi-exclamation-circle me-1"></i>{errorMsg}</div>}
               </form>
 
-              {/* CART TABLE */}
-              <div className="table-responsive mb-4 border rounded">
-                <table className="table table-hover mb-0 text-center align-middle">
-                  <thead className="table-light">
-                    <tr><th className="text-start ps-3">Product</th><th>W.Card</th><th>Price</th><th>Qty</th><th>Total</th><th>Action</th></tr>
+              {/* 4. CART TABLE */}
+              <div className={`table-responsive border rounded-3 mb-4 ${darkMode ? 'border-secondary' : ''}`}>
+                <table className={`table table-hover mb-0 align-middle text-center ${darkMode ? 'table-dark' : ''}`}>
+                  <thead className={`${theme.tableHead} small text-uppercase`}>
+                    <tr><th className="text-start ps-4">Item</th><th>Price</th><th>Disc</th><th>Qty</th><th className="text-end pe-4">Total</th><th></th></tr>
                   </thead>
                   <tbody>
                     {cart.length === 0 ? (
-                      <tr><td colSpan="6" className="py-4 text-muted">Cart is empty.</td></tr>
+                      <tr><td colSpan="6" className={`py-5 ${theme.subText}`}>No items added to bill yet.</td></tr>
                     ) : (
-                      cart.map((item, index) => (
-                        <tr key={index}>
-                          <td className="text-start ps-3 fw-bold">{item.product_name}</td>
-                          <td>{item.warranty_image ? <i className="bi bi-image text-primary"></i> : <span className="text-muted small">-</span>}</td>
-                          <td>{item.unit_price} {item.discount > 0 && <span className="text-danger small ms-1">(-{item.discount})</span>}</td>
-                          <td>{item.quantity}</td>
-                          <td className="fw-bold">{formatINR(item.total)}</td>
-                          <td><button className="btn btn-sm btn-light text-danger border-0" onClick={() => removeFromCart(index)}><i className="bi bi-x-lg"></i></button></td>
+                      cart.map((item, idx) => (
+                        <tr key={idx} className={darkMode ? 'border-secondary' : ''}>
+                          <td className={`text-start ps-4 fw-bold ${theme.text}`}>
+                              {item.product_name}
+                              {item.warranty_image && <span className="badge bg-info ms-2" style={{fontSize: '0.6rem'}}>WARRANTY</span>}
+                          </td>
+                          <td className={theme.text}>₹{item.unit_price}</td>
+                          <td className="text-danger">{item.discount > 0 ? `-₹${item.discount}` : '-'}</td>
+                          <td className={theme.text}>{item.quantity}</td>
+                          <td className={`text-end pe-4 fw-bold ${theme.text}`}>₹{item.total.toLocaleString('en-IN')}</td>
+                          <td><button className="btn btn-sm text-danger" onClick={() => removeFromCart(idx)}><i className="bi bi-trash"></i></button></td>
                         </tr>
                       ))
                     )}
@@ -352,115 +544,88 @@ const Billing = () => {
                 </table>
               </div>
 
-              {/* TOTALS */}
+              {/* 5. PAYMENT SECTION */}
               <div className="row justify-content-end">
-                <div className="col-md-6">
-                  <div className="bg-light p-3 rounded">
-                    <div className="d-flex justify-content-between mb-2">
-                        <span className="fw-bold">Grand Total:</span>
-                        <span className="fw-bold fs-5">{formatINR(grandTotal)}</span>
+                <div className="col-md-5">
+                    <div className={`p-3 rounded border ${theme.paymentBox}`}>
+                        <div className={`d-flex justify-content-between mb-2 ${theme.text}`}>
+                            <span>Subtotal:</span>
+                            <span className="fw-bold">₹{grandTotal.toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="input-group mb-2">
+                            <span className={`input-group-text fw-bold ${theme.inputGroupText}`}>Paid ₹</span>
+                            <input 
+                                type="number" 
+                                className={`form-control fw-bold ${theme.input} ${paidError ? 'is-invalid' : ''}`} 
+                                value={paid} 
+                                onChange={handlePaidChange} 
+                                placeholder="0"
+                            />
+                        </div>
+                        {paidError && <small className="text-danger d-block mb-2">{paidError}</small>}
+                        
+                        <div className="d-flex justify-content-between border-top pt-2">
+                            <span className="fs-5 fw-bold text-danger">Balance Due:</span>
+                            <span className="fs-5 fw-bold text-danger">₹{balance.toLocaleString('en-IN')}</span>
+                        </div>
+                        
+                        <button className="btn btn-success w-100 mt-3 py-2 fw-bold shadow-sm" onClick={handleSubmit} disabled={isSubmitting || cart.length === 0}>
+                            {isSubmitting ? <span className="spinner-border spinner-border-sm me-2"></span> : <i className="bi bi-check-lg me-2"></i>}
+                            GENERATE BILL
+                        </button>
                     </div>
-                    
-                    <div className="d-flex justify-content-between align-items-center mb-1">
-                        <span className="text-muted small fw-bold">PAID:</span>
-                        <input 
-                            type="number" 
-                            className={`form-control w-50 ${paidError ? 'is-invalid' : ''}`} 
-                            value={paid} 
-                            onChange={handlePaidChange} 
-                        />
-                    </div>
-                    {/* Error Message for Paid Amount */}
-                    {paidError && <div className="text-end text-danger small fw-bold mb-2">{paidError}</div>}
-
-                    <div className="border-top pt-2 d-flex justify-content-between text-danger">
-                        <span className="fw-bold">Due:</span>
-                        <span className="fw-bold fs-4">{formatINR(balance)}</span>
-                    </div>
-                  </div>
-                  
-                  {/* Disable button if there's a paidError */}
-                  <button 
-                    onClick={handleSubmit} 
-                    className="btn btn-dark w-100 mt-3 py-3 fw-bold shadow-sm" 
-                    disabled={cart.length === 0 || isSubmitting || !!paidError}
-                  >
-                    {isSubmitting ? 'Processing...' : 'GENERATE INVOICE'}
-                  </button>
                 </div>
               </div>
+
             </div>
           </div>
         </div>
 
-        {/* RIGHT: HISTORY (TODAY ONLY) */}
+        {/* RIGHT: RECENT BILLS */}
         <div className="col-lg-4">
-          <div className="card shadow-sm h-100 overflow-hidden">
-            <div className="card-header py-3 bg-white d-flex justify-content-between align-items-center">
-              <h6 className="fw-bold m-0 text-secondary small">TODAY'S INVOICES</h6>
-              <button className="btn btn-sm btn-light border small py-0" onClick={() => navigate('/view-bills')}>View All <i className="bi bi-arrow-right ms-1"></i></button>
+          <div className={`card h-100 ${theme.card}`}>
+            <div className={`card-header pt-4 pb-2 ${theme.cardHeader} d-flex justify-content-between align-items-center`}>
+              <h6 className={`fw-bold m-0 ${theme.text}`}>Today's Activity</h6>
+              <span className={`badge ${theme.badge}`}>{getTodayStr()}</span>
             </div>
-            <div className="table-responsive">
-              <table className="table table-hover mb-0 align-middle">
-                <thead><tr><th className="ps-3">ID</th><th>Customer</th><th>Amount</th><th className="text-end pe-3">Action</th></tr></thead>
-                <tbody>
-                  {todaysBills.length === 0 ? (
-                      <tr><td colSpan="4" className="text-center py-4 text-muted small">No bills created today.</td></tr>
-                  ) : (
-                      todaysBills.map(h => {
-                        const isCancelled = h.invoice_status === 'Cancelled';
-                        return (
-                          <tr key={h.id} style={{ opacity: isCancelled ? 0.5 : 1, textDecoration: isCancelled ? 'line-through' : 'none' }}>
-                            <td className="ps-3"><span className="badge bg-light text-dark border">#{h.invoice_no}</span></td>
-                            <td><div className="fw-bold small">{h.users?.name}</div></td>
-                            <td className="fw-bold small">{formatINR(h.total_amount)}</td>
-                            <td className="text-end pe-3">
-                              <div className="form-check form-switch d-flex justify-content-end">
-                                <input className="form-check-input" type="checkbox" style={{ cursor: 'pointer', backgroundColor: isCancelled ? '#dc3545' : '#198754', borderColor: isCancelled ? '#dc3545' : '#198754' }} checked={!isCancelled} onChange={() => toggleStatus(h.id)} />
-                              </div>
-                              <small style={{ fontSize: '0.65rem' }} className={isCancelled ? 'text-danger fw-bold' : 'text-success fw-bold'}>{isCancelled ? 'CANCELLED' : 'ACCEPTED'}</small>
-                            </td>
-                          </tr>
-                        );
-                      })
-                  )}
-                </tbody>
-              </table>
+            <div className="card-body p-0">
+                <div className="list-group list-group-flush">
+                    {todaysBills.length === 0 ? (
+                        <div className={`text-center py-5 ${theme.subText}`}>No bills generated today.</div>
+                    ) : (
+                        todaysBills.map(b => (
+                            <div key={b.id} className={`list-group-item d-flex justify-content-between align-items-center py-3 ${theme.listGroupItem}`}>
+                                <div>
+                                    <div className={`fw-bold ${theme.text}`}>{b.users?.name || 'Unknown'}</div>
+                                    <small className={theme.subText}>Inv: #{b.invoice_no}</small>
+                                </div>
+                                <div className="text-end">
+                                    <div className={`fw-bold ${theme.text}`}>₹{b.total_amount.toLocaleString('en-IN')}</div>
+                                    <span 
+                                        onClick={() => toggleStatus(b.id)}
+                                        className={`badge ${b.invoice_status === 'Cancelled' ? 'bg-danger' : 'bg-success'} pointer`}
+                                        style={{cursor: 'pointer'}}
+                                    >
+                                        {b.invoice_status}
+                                    </span>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
             </div>
           </div>
         </div>
+
       </div>
 
-      {/* --- CSS FOR TRANSPARENT SCROLLBAR --- */}
-      <style>
-        {`
-          /* For Webkit Browsers (Chrome, Edge, Safari) */
-          .custom-scrollbar::-webkit-scrollbar {
-            width: 8px; /* Slim width */
-          }
-          
-          .custom-scrollbar::-webkit-scrollbar-track {
-            background: transparent; /* Invisible track */
-          }
-          
-          .custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: rgba(150, 150, 150, 0.3); /* Subtle semi-transparent grey */
-            border-radius: 20px; /* Rounded pill shape */
-            border: 2px solid transparent; /* Creates padding around thumb */
-            background-clip: content-box;
-          }
-
-          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-            background-color: rgba(150, 150, 150, 0.6); /* Slightly darker on hover */
-          }
-
-          /* Hide scrollbar for Firefox but keep scroll */
-          .custom-scrollbar {
-            scrollbar-width: thin;
-            scrollbar-color: rgba(150, 150, 150, 0.3) transparent;
-          }
-        `}
-      </style>
+      {/* STYLES */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: ${darkMode ? '#475569' : '#cbd5e1'}; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: ${darkMode ? '#64748b' : '#94a3b8'}; }
+      `}</style>
     </div>
   );
 };

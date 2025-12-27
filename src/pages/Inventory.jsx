@@ -26,6 +26,9 @@ const Inventory = () => {
   });
   const [filteredSubs, setFilteredSubs] = useState([]);
   
+  // --- EDIT PRODUCT STATE ---
+  const [editingProduct, setEditingProduct] = useState(null); // Stores the product being edited
+
   // Restock (with Date)
   const [restockData, setRestockData] = useState({ id: null, name: '', qty: '', received_date: '' });
 
@@ -74,7 +77,7 @@ const Inventory = () => {
   const getCatName = (id) => categories.find(c => c.id === id)?.name || 'Unknown';
   const getSubName = (id) => subCategories.find(s => s.id === id)?.name || '-';
 
-  // --- 3. DELETE LOGIC (Handles Backend 400 Errors) ---
+  // --- 3. DELETE LOGIC ---
   const promptDelete = (id, type, name) => {
       setConfirmModal({ show: true, id, type, title: name });
   };
@@ -94,13 +97,39 @@ const Inventory = () => {
           loadInventoryData();
           showAlert('success', response.data.message || 'Item deleted.');
       } catch (err) {
-          // Backend sends 400 if item is in use
           const errorMsg = err.response?.data?.detail || "Delete failed. Item might be in use.";
           showAlert('danger', errorMsg);
       }
   };
 
-  // --- 4. ADD PRODUCT LOGIC ---
+  // --- 4. ADD / UPDATE PRODUCT LOGIC ---
+  
+  // Open Modal for Creating
+  const openCreateModal = () => {
+      setEditingProduct(null); // Reset edit mode
+      setNewProduct({ name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '' });
+      setFilteredSubs([]);
+      setShowAddModal(true);
+  };
+
+  // Open Modal for Editing
+  const openEditModal = (product) => {
+      setEditingProduct(product);
+      setNewProduct({
+          name: product.name,
+          sku: product.sku || '',
+          brand_id: product.brand_id,
+          category_id: product.category_id,
+          sub_category_id: product.sub_category_id || '',
+          net_price: product.net_price || '',
+          sell_price: product.sell_price || '',
+          warranty_details: product.warranty_details || ''
+      });
+      // Set subcategories for the selected category
+      setFilteredSubs(subCategories.filter(s => s.category_id === product.category_id));
+      setShowAddModal(true);
+  };
+
   const handleCategoryChange = (e) => {
     const catId = e.target.value; 
     setNewProduct({ ...newProduct, category_id: catId, sub_category_id: '' });
@@ -126,18 +155,27 @@ const Inventory = () => {
         warranty_details: newProduct.warranty_details || ""
       };
 
-      await apiClient.post('/inventory/products', payload);
-      showAlert('success', 'Product Created!');
+      if (editingProduct) {
+          // UPDATE EXISTING PRODUCT
+          await apiClient.put(`/inventory/products/${editingProduct.id}`, payload);
+          showAlert('success', 'Product Updated!');
+      } else {
+          // CREATE NEW PRODUCT
+          await apiClient.post('/inventory/products', payload);
+          showAlert('success', 'Product Created!');
+      }
+
       setNewProduct({ name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '' });
       setFilteredSubs([]);
       loadInventoryData();
       setShowAddModal(false);
+      setEditingProduct(null);
     } catch (err) {
-      showAlert('danger', err.response?.data?.detail || "Failed to create product");
+      showAlert('danger', err.response?.data?.detail || "Failed to save product");
     }
   };
 
-  // --- 5. RESTOCK LOGIC (Matches Backend Schema) ---
+  // --- 5. RESTOCK LOGIC ---
   const openRestockModal = (product) => {
       const today = new Date().toISOString().split('T')[0];
       setRestockData({ id: product.id, name: product.name, qty: '', received_date: today });
@@ -268,7 +306,7 @@ const Inventory = () => {
             <button className={`btn ${theme.btnGhost} fw-bold`} onClick={() => setShowMasterModal(true)}>
                 <i className="bi bi-tags me-2"></i> Brands / Categories
             </button>
-            <button className="btn btn-primary fw-bold shadow-sm" onClick={() => setShowAddModal(true)}>
+            <button className="btn btn-primary fw-bold shadow-sm" onClick={openCreateModal}>
                 <i className="bi bi-plus-lg me-2"></i> New Product
             </button>
         </div>
@@ -327,6 +365,7 @@ const Inventory = () => {
                                 <td className="fw-bold">${p.sell_price}</td>
                                 <td className="text-end pe-4">
                                     <button className="btn btn-sm btn-outline-warning me-2" onClick={() => openRestockModal(p)} title="Restock"><i className="bi bi-box-arrow-in-down"></i></button>
+                                    <button className="btn btn-sm btn-outline-info me-2" onClick={() => openEditModal(p)} title="Edit"><i className="bi bi-pencil-square"></i></button>
                                     <button className="btn btn-sm btn-outline-danger" onClick={() => promptDelete(p.id, 'product', p.name)} title="Delete"><i className="bi bi-trash"></i></button>
                                 </td>
                             </tr>
@@ -360,7 +399,7 @@ const Inventory = () => {
 
       {/* ================= MODALS ================= */}
       
-      {/* 1. ADD PRODUCT */}
+      {/* 1. ADD / EDIT PRODUCT */}
       {showAddModal && (
         <>
             <div className="modal-backdrop fade show" style={{ zIndex: 1050 }}></div>
@@ -368,7 +407,7 @@ const Inventory = () => {
                 <div className="modal-dialog modal-lg modal-dialog-centered">
                     <div className={`modal-content ${theme.modalContent}`}>
                         <div className={`modal-header ${theme.modalHeader} pb-0`}>
-                            <h5 className="modal-title fw-bold">New Product</h5>
+                            <h5 className="modal-title fw-bold">{editingProduct ? 'Edit Product' : 'New Product'}</h5>
                             <button type="button" className={`btn-close ${theme.btnClose}`} onClick={() => setShowAddModal(false)}></button>
                         </div>
                         <div className="modal-body p-4">
@@ -416,7 +455,7 @@ const Inventory = () => {
                                         <textarea className={`form-control ${theme.input}`} rows="2" value={newProduct.warranty_details} onChange={e => setNewProduct({...newProduct, warranty_details: e.target.value})}></textarea>
                                     </div>
                                 </div>
-                                <button type="submit" className="btn btn-primary w-100 mt-4 fw-bold">Create Product</button>
+                                <button type="submit" className="btn btn-primary w-100 mt-4 fw-bold">{editingProduct ? 'Update Product' : 'Create Product'}</button>
                             </form>
                         </div>
                     </div>

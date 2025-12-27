@@ -7,7 +7,7 @@ import './App.css';
 import Sidebar from './components/Sidebar';
 import ServiceNotifier from './components/ServiceNotifier';
 import UpdateProgress from './components/UpdateProgress';
-import LoadingScreen from './components/LoadingScreen'; // <--- IMPORT THIS
+import LoadingScreen from './components/LoadingScreen';
 
 // PAGES
 import Dashboard from './pages/Dashboard'; 
@@ -16,11 +16,14 @@ import Billing from './pages/Billing';
 import Accounts from './pages/Accounts';
 import Settings from './pages/Settings';
 import ViewBills from './pages/ViewBills';
-import FinancialReports from './pages/FinancialReports';
-import ServiceReports from './pages/ServiceReports';
 import Inventory from './pages/Inventory';
 import Services from './pages/Services';
 import Employees from './pages/Employees'; 
+
+// REPORT PAGES
+import FinancialReports from './pages/FinancialReports';
+import InventoryReports from './pages/InventoryReports'; // <--- NEW IMPORT
+import ServiceReports from './pages/ServiceReports';
 
 const AppContent = () => {
   // GET LOADING STATE
@@ -44,18 +47,26 @@ const AppContent = () => {
           transition: 'margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.3s' 
         }}>
           <Routes>
+            {/* Default Redirect */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            
+            {/* Main Modules */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/view-bills" element={<ViewBills />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/services" element={<Services />} />
-            <Route path="/reports/financial" element={<FinancialReports />} />
-            <Route path="/reports/service" element={<ServiceReports />} />
-            <Route path="/settings" element={<Settings />} />
             <Route path="/inventory" element={<Inventory />} />
             <Route path="/employees" element={<Employees />} />
+            
+            {/* Reports */}
+            <Route path="/reports/financial" element={<FinancialReports />} />
+            <Route path="/reports/inventory" element={<InventoryReports />} /> {/* <--- NEW ROUTE */}
+            <Route path="/reports/service" element={<ServiceReports />} />
+            
+            {/* Settings */}
+            <Route path="/settings" element={<Settings />} />
           </Routes>
         </div>
       </div>
