@@ -4,28 +4,25 @@ import apiClient from '../api/client';
 import Swal from 'sweetalert2'; 
 
 // ==========================================
-// 1. REUSABLE SEARCHABLE SELECT COMPONENT (FIXED)
+// 1. REUSABLE SEARCHABLE SELECT COMPONENT
 // ==========================================
 const SearchableSelect = ({ options, value, onChange, placeholder, label, theme, darkMode }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [search, setSearch] = useState('');
     const wrapperRef = useRef(null);
 
-    // Find the currently selected object to display its label
     const selectedItem = options.find(opt => opt.value === value);
 
-    // Filter options based on search text
     const filteredOptions = options.filter(opt => 
         opt.label.toLowerCase().includes(search.toLowerCase()) || 
         opt.subLabel?.toLowerCase().includes(search.toLowerCase())
     );
 
-    // Close dropdown if clicked outside
     useEffect(() => {
         function handleClickOutside(event) {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 setIsOpen(false);
-                setSearch(''); // Reset search on close
+                setSearch(''); 
             }
         }
         document.addEventListener("mousedown", handleClickOutside);
@@ -36,10 +33,9 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
         <div className="mb-1" ref={wrapperRef}>
             <label className={`small fw-bold mb-1 ${theme.subText}`}>{label}</label>
             <div className="position-relative">
-                {/* Input Field Wrapper */}
                 <div 
                     className={`input-group ${theme.input} border rounded overflow-hidden`} 
-                    onClick={() => setIsOpen(!isOpen)} // Toggle when clicking the arrow/container
+                    onClick={() => setIsOpen(!isOpen)} 
                     style={{cursor: 'text'}}
                 >
                     <input 
@@ -47,13 +43,10 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
                         className={`form-control border-0 shadow-none ${theme.input}`} 
                         placeholder={selectedItem ? selectedItem.label : placeholder}
                         value={isOpen ? search : (selectedItem ? selectedItem.label : '')}
-                        
-                        // --- BUG FIX: STOP PROPAGATION ---
                         onClick={(e) => {
-                            e.stopPropagation(); // Stop click from bubbling to parent (which toggles close)
-                            setIsOpen(true);     // Force open
+                            e.stopPropagation(); 
+                            setIsOpen(true);     
                         }}
-                        
                         onChange={(e) => { setSearch(e.target.value); setIsOpen(true); }}
                         onFocus={() => setIsOpen(true)}
                         style={{backgroundColor: 'transparent'}}
@@ -62,8 +55,6 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
                         <i className={`bi bi-chevron-${isOpen ? 'up' : 'down'}`}></i>
                     </span>
                 </div>
-
-                {/* Dropdown List */}
                 {isOpen && (
                     <div 
                         className="position-absolute w-100 shadow-lg rounded mt-1 overflow-auto custom-scrollbar" 
@@ -86,7 +77,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
                                         backgroundColor: opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'
                                     }}
                                     onMouseDown={() => {
-                                        onChange(opt.value); // Pass ID back to parent
+                                        onChange(opt.value); 
                                         setIsOpen(false);
                                         setSearch('');
                                     }}
@@ -158,7 +149,6 @@ const Billing = () => {
     badge: darkMode ? 'bg-secondary text-white' : 'bg-light text-dark'
   };
 
-  // --- PREPARE DATA FOR SEARCH COMPONENT ---
   const customerOptions = customers.map(c => ({
       value: c.id,
       label: c.name,
@@ -188,7 +178,6 @@ const Billing = () => {
 
   // --- HANDLERS ---
   
-  // New Handler for Searchable Product Select
   const handleProductSelect = (selectedId) => {
     setProdId(selectedId);
     const p = products.find(i => i.id === selectedId);
@@ -227,15 +216,28 @@ const Billing = () => {
     }
   };
 
+  // --- HELPER: Count existing items in cart to prevent over-stocking ---
+  const getExistingCartQuantity = (productId) => {
+    return cart.reduce((total, item) => {
+        return item.product_id === productId ? total + item.quantity : total;
+    }, 0);
+  };
+
+  // --- FIXED: ADD TO CART FUNCTION ---
   const addToCart = (e) => {
     e.preventDefault();
     if (!selectedProduct) return;
     
     const requestedQty = parseInt(qty) || 1;
     const currentStock = selectedProduct.stock_quantity || 0; 
+    
+    // 1. CALCULATE TOTAL (Cart + Input)
+    const alreadyInCart = getExistingCartQuantity(selectedProduct.id);
+    const totalRequest = alreadyInCart + requestedQty;
 
-    if (requestedQty > currentStock) {
-        return setErrorMsg(`Insufficient Stock! Available: ${currentStock} only.`);
+    // 2. CHECK STOCK
+    if (totalRequest > currentStock) {
+        return setErrorMsg(`Insufficient Stock! Available: ${currentStock}. In Cart: ${alreadyInCart}. You tried: ${requestedQty}`);
     }
 
     if (hasWarranty && !warrantyFile) {
@@ -260,7 +262,30 @@ const Billing = () => {
       warranty_image: hasWarranty ? warrantyFile : null 
     };
 
-    setCart([...cart, newItem]);
+    // 3. MERGE OR ADD TO CART
+    setCart(prevCart => {
+        // Check if item exists (Same Product & Same Price/Discount config)
+        // If price/discount is different, we add as new row. If same, we merge.
+        const existingIdx = prevCart.findIndex(item => 
+            item.product_id === newItem.product_id && 
+            item.final_price === newItem.final_price
+        );
+
+        if (existingIdx > -1) {
+            const newCart = [...prevCart];
+            const existingItem = newCart[existingIdx];
+            newCart[existingIdx] = {
+                ...existingItem,
+                quantity: existingItem.quantity + newItem.quantity,
+                total: existingItem.total + newItem.total
+            };
+            return newCart;
+        } else {
+            return [...prevCart, newItem];
+        }
+    });
+
+    // Reset Inputs
     setProdId(''); setQty(1); setPrice(0); setDiscount(''); 
     setSelectedProduct(null); setErrorMsg('');
     setHasWarranty(false); setWarrantyFile(null); 
@@ -413,7 +438,7 @@ const Billing = () => {
 
               {/* 2. OPTIONAL SERVICE DETAILS */}
               {scheduleService && (
-                   <div className={`p-3 rounded border border-dashed mb-4 animate__animated animate__fadeIn ${darkMode ? 'border-secondary' : 'bg-light'}`}>
+                    <div className={`p-3 rounded border border-dashed mb-4 animate__animated animate__fadeIn ${darkMode ? 'border-secondary' : 'bg-light'}`}>
                       <div className="row g-3">
                           <div className="col-md-6">
                               <label className={`small fw-bold ${theme.subText}`}>Service Date</label>
@@ -431,7 +456,7 @@ const Billing = () => {
                               </select>
                           </div>
                       </div>
-                   </div>
+                    </div>
               )}
 
               <hr className={`opacity-25 my-4 ${darkMode ? 'text-white' : 'text-muted'}`}/>

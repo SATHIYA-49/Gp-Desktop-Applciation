@@ -1,30 +1,26 @@
 const { app, BrowserWindow, dialog, ipcMain } = require("electron");
 const { autoUpdater } = require("electron-updater");
 const path = require("path");
+const log = require("electron-log");
 
-// --- 1. CONFIGURATION ---
-// Disable auto-download so we can prompt the user first
+/* =========================
+   AUTO UPDATER CONFIG
+========================= */
 autoUpdater.autoDownload = false;
 autoUpdater.autoInstallOnAppQuit = true;
-
-// Optional: Set logger if you want to see logs in a file
-autoUpdater.logger = require("electron-log");
-autoUpdater.logger.transports.file.level = "info";
+autoUpdater.logger = log;
+log.transports.file.level = "info";
 
 let win;
 
-// --- 2. LOGGING HELPER ---
-function sendLog(message) {
-  console.log(`[Updater] ${message}`);
-  if (win && !win.isDestroyed()) {
-    win.webContents.send("update-log", message);
-  }
-}
-
+/* =========================
+   WINDOW CREATION
+========================= */
 function createWindow() {
   win = new BrowserWindow({
     width: 1280,
     height: 800,
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -32,133 +28,118 @@ function createWindow() {
     }
   });
 
-  // Load App
+  // 🔥 VERY IMPORTANT FIX (BLANK SCREEN ISSUE)
   if (!app.isPackaged) {
     win.loadURL("http://localhost:3000");
   } else {
-    win.loadFile(path.join(__dirname, "../build/index.html"));
+    const indexPath = path.join(app.getAppPath(), "build", "index.html");
+    win.loadURL(`file://${indexPath}`);
   }
 
-  win.on("closed", () => (win = null));
+  win.once("ready-to-show", () => {
+    win.show();
 
-  // --- 3. AUTO-CHECK ON STARTUP (Production Only) ---
-  win.once('ready-to-show', () => {
+    // Auto update only in production
     if (app.isPackaged) {
-      // Wait 3 seconds for React to load, then check
       setTimeout(() => {
-        sendLog("Initializing auto-update check...");
-        autoUpdater.checkForUpdatesAndNotify(); 
+        autoUpdater.checkForUpdates();
       }, 3000);
-    } else {
-      sendLog("Dev Mode: Auto-update check skipped.");
     }
+  });
+
+  win.on("closed", () => {
+    win = null;
   });
 }
 
-// --- 4. APP LIFECYCLE ---
-app.whenReady().then(() => {
-  createWindow();
-});
+/* =========================
+   APP LIFE CYCLE
+========================= */
+app.whenReady().then(createWindow);
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-/* ==================================================
-   5. IPC LISTENERS (Connects to React)
-================================================== */
+/* =========================
+   IPC (REACT ↔ ELECTRON)
+========================= */
 
-// Trigger Manual Check (from Settings Page)
-ipcMain.on('manual-check-update', () => {
-  if (!app.isPackaged) {
-    sendLog("Manual check ignored in Dev Mode.");
-    return;
-  }
-  sendLog("Manual check started...");
-  autoUpdater.checkForUpdates();
-});
-
-// Get App Version (for display in UI)
-ipcMain.handle('get-app-version', () => {
+// Get app version
+ipcMain.handle("get-app-version", () => {
   return app.getVersion();
 });
 
-/* ==================================================
-   6. AUTO-UPDATER EVENTS
-================================================== */
-
-// A. Checking
-autoUpdater.on("checking-for-update", () => {
-  sendLog("Checking GitHub for releases...");
+// Manual update check (Settings page)
+ipcMain.on("manual-check-update", () => {
+  if (app.isPackaged) {
+    autoUpdater.checkForUpdates();
+  }
 });
 
-// B. Update Available -> Prompt User
-autoUpdater.on("update-available", (info) => {
-  sendLog(`v${info.version} found! Release date: ${info.releaseDate}`);
-  
-  // Show Dialog
-  if (win) {
-    dialog.showMessageBox(win, {
-      type: 'info',
-      title: 'Update Available',
-      message: `A new version (${info.version}) is available.\n\nDo you want to download it now?`,
-      buttons: ['Yes, Download', 'No, Later'],
+/* =========================
+   AUTO UPDATER EVENTS
+========================= */
+
+// Checking
+autoUpdater.on("checking-for-update", () => {
+  log.info("Checking for updates...");
+});
+
+// Update available
+autoUpdater.on("update-available", info => {
+  log.info("Update available:", info.version);
+
+  dialog
+    .showMessageBox(win, {
+      type: "info",
+      title: "Update Available",
+      message: `New version ${info.version} is available.\n\nDownload now?`,
+      buttons: ["Download", "Later"],
       cancelId: 1
-    }).then((result) => {
+    })
+    .then(result => {
       if (result.response === 0) {
-        sendLog("User accepted. Downloading...");
         autoUpdater.downloadUpdate();
-      } else {
-        sendLog("User declined update.");
       }
     });
-  }
 });
 
-// C. Up to Date
+// No update
 autoUpdater.on("update-not-available", () => {
-  sendLog("App is up to date.");
+  log.info("No updates available");
 });
 
-// D. Error Handling
-autoUpdater.on("error", (err) => {
-  sendLog(`Error: ${err.message}`);
-  if(err.message.includes("signature")) {
-     sendLog("Signature Error. Check 'verifyUpdateCodeSignature' in package.json.");
-  }
-});
+// Download progress
+autoUpdater.on("download-progress", progress => {
+  const percent = Math.round(progress.percent);
+  log.info(`Downloading ${percent}%`);
 
-// E. Download Progress -> Send to UI
-autoUpdater.on("download-progress", (progressObj) => {
-  const percent = Math.round(progressObj.percent);
-  const transferred = (progressObj.transferred / 1024 / 1024).toFixed(2);
-  const total = (progressObj.total / 1024 / 1024).toFixed(2);
-  
-  sendLog(`Downloading: ${percent}% (${transferred} MB / ${total} MB)`);
-  
   if (win && !win.isDestroyed()) {
     win.webContents.send("update-progress", percent);
   }
 });
 
-// F. Update Downloaded -> Prompt Restart
+// Downloaded
 autoUpdater.on("update-downloaded", () => {
-  sendLog("Download complete. Preparing to install...");
-  
-  if (win) {
-    dialog.showMessageBox(win, {
+  log.info("Update downloaded");
+
+  dialog
+    .showMessageBox(win, {
       type: "question",
       title: "Install Update",
-      message: "Update is ready. Restart the app now to apply changes?",
-      buttons: ["Restart Now", "Later"],
+      message: "Update ready. Restart now?",
+      buttons: ["Restart", "Later"],
       cancelId: 1
-    }).then(result => {
+    })
+    .then(result => {
       if (result.response === 0) {
-        sendLog("Quitting to install...");
         autoUpdater.quitAndInstall();
-      } else {
-        sendLog("Restart postponed.");
       }
     });
-  }
+});
+
+// Errors
+autoUpdater.on("error", err => {
+  log.error("Updater error:", err);
 });

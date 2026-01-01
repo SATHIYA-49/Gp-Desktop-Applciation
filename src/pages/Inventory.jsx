@@ -22,12 +22,12 @@ const Inventory = () => {
   // --- FORM DATA ---
   const [newProduct, setNewProduct] = useState({
     name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', 
-    net_price: '', sell_price: '', warranty_details: ''
+    net_price: '', sell_price: '', warranty_details: '', is_active: true // Added is_active
   });
   const [filteredSubs, setFilteredSubs] = useState([]);
   
   // --- EDIT PRODUCT STATE ---
-  const [editingProduct, setEditingProduct] = useState(null); // Stores the product being edited
+  const [editingProduct, setEditingProduct] = useState(null); 
 
   // Restock (with Date)
   const [restockData, setRestockData] = useState({ id: null, name: '', qty: '', received_date: '' });
@@ -102,17 +102,29 @@ const Inventory = () => {
       }
   };
 
-  // --- 4. ADD / UPDATE PRODUCT LOGIC ---
-  
-  // Open Modal for Creating
+  // --- 4. TOGGLE ACTIVE STATUS LOGIC ---
+  const toggleActiveStatus = async (product) => {
+      try {
+          const newStatus = !product.is_active; // Flip status
+          // Optimistic update
+          product.is_active = newStatus; 
+          
+          await apiClient.put(`/inventory/products/${product.id}`, { is_active: newStatus });
+          loadInventoryData(); 
+          showAlert('success', `Product marked as ${newStatus ? 'Active' : 'Inactive'}`);
+      } catch (err) {
+          showAlert('danger', "Failed to update status");
+      }
+  };
+
+  // --- 5. ADD / UPDATE PRODUCT LOGIC ---
   const openCreateModal = () => {
-      setEditingProduct(null); // Reset edit mode
-      setNewProduct({ name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '' });
+      setEditingProduct(null);
+      setNewProduct({ name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '', is_active: true });
       setFilteredSubs([]);
       setShowAddModal(true);
   };
 
-  // Open Modal for Editing
   const openEditModal = (product) => {
       setEditingProduct(product);
       setNewProduct({
@@ -123,9 +135,9 @@ const Inventory = () => {
           sub_category_id: product.sub_category_id || '',
           net_price: product.net_price || '',
           sell_price: product.sell_price || '',
-          warranty_details: product.warranty_details || ''
+          warranty_details: product.warranty_details || '',
+          is_active: product.is_active ?? true
       });
-      // Set subcategories for the selected category
       setFilteredSubs(subCategories.filter(s => s.category_id === product.category_id));
       setShowAddModal(true);
   };
@@ -152,20 +164,19 @@ const Inventory = () => {
         sub_category_id: newProduct.sub_category_id ? String(newProduct.sub_category_id) : null,
         net_price: parseFloat(newProduct.net_price),
         sell_price: parseFloat(newProduct.sell_price),
-        warranty_details: newProduct.warranty_details || ""
+        warranty_details: newProduct.warranty_details || "",
+        is_active: newProduct.is_active 
       };
 
       if (editingProduct) {
-          // UPDATE EXISTING PRODUCT
           await apiClient.put(`/inventory/products/${editingProduct.id}`, payload);
           showAlert('success', 'Product Updated!');
       } else {
-          // CREATE NEW PRODUCT
           await apiClient.post('/inventory/products', payload);
           showAlert('success', 'Product Created!');
       }
 
-      setNewProduct({ name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '' });
+      setNewProduct({ name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '', is_active: true });
       setFilteredSubs([]);
       loadInventoryData();
       setShowAddModal(false);
@@ -175,7 +186,7 @@ const Inventory = () => {
     }
   };
 
-  // --- 5. RESTOCK LOGIC ---
+  // --- 6. RESTOCK LOGIC ---
   const openRestockModal = (product) => {
       const today = new Date().toISOString().split('T')[0];
       setRestockData({ id: product.id, name: product.name, qty: '', received_date: today });
@@ -201,7 +212,7 @@ const Inventory = () => {
     }
   };
 
-  // --- 6. MASTER DATA LOGIC ---
+  // --- 7. MASTER DATA LOGIC ---
   useEffect(() => {
     setMasterInput('');
     setEditingMaster(null); 
@@ -339,6 +350,7 @@ const Inventory = () => {
                         <th>Brand</th>
                         <th>Category</th>
                         <th>Sub-Cat</th>
+                        <th>Status</th> {/* NEW COLUMN */}
                         <th>Stock</th>
                         <th>Sell Price</th>
                         <th className="text-end pe-4">Actions</th>
@@ -346,10 +358,10 @@ const Inventory = () => {
                 </thead>
                 <tbody className={darkMode ? 'border-secondary' : ''}>
                     {currentProducts.length === 0 ? (
-                        <tr><td colSpan="7" className="text-center py-5 opacity-50">No products found.</td></tr>
+                        <tr><td colSpan="8" className="text-center py-5 opacity-50">No products found.</td></tr>
                     ) : (
                         currentProducts.map(p => (
-                            <tr key={p.id} className={theme.tableRowText}>
+                            <tr key={p.id} className={`${theme.tableRowText} ${!p.is_active ? 'opacity-50' : ''}`}>
                                 <td className="ps-4">
                                     <div className="fw-bold">{p.name}</div>
                                     <div className={`small font-monospace ${theme.subText}`}>{p.sku || 'N/A'}</div>
@@ -357,6 +369,24 @@ const Inventory = () => {
                                 <td><span className={`badge ${darkMode ? 'bg-secondary' : 'bg-light text-dark border'}`}>{getBrandName(p.brand_id)}</span></td>
                                 <td><span className={`badge ${darkMode ? 'bg-secondary' : 'bg-light text-dark border'}`}>{getCatName(p.category_id)}</span></td>
                                 <td><span className={`small ${theme.subText}`}>{getSubName(p.sub_category_id)}</span></td>
+                                
+                                {/* TOGGLE BUTTON (Active/Inactive) */}
+                                <td>
+                                    <div className="form-check form-switch">
+                                        <input 
+                                            className="form-check-input" 
+                                            type="checkbox" 
+                                            role="switch" 
+                                            checked={p.is_active ?? true} // Default to true if undefined
+                                            onChange={() => toggleActiveStatus(p)}
+                                            style={{cursor: 'pointer'}}
+                                        />
+                                        <label className={`form-check-label small fw-bold ms-1 ${p.is_active ? 'text-success' : 'text-danger'}`}>
+                                            {p.is_active ? 'Active' : 'Inactive'}
+                                        </label>
+                                    </div>
+                                </td>
+
                                 <td>
                                     <span className={`badge rounded-pill px-3 ${p.stock_quantity > 10 ? 'bg-success-subtle text-success' : 'bg-warning-subtle text-warning'}`}>
                                         {p.stock_quantity} Units
@@ -454,6 +484,21 @@ const Inventory = () => {
                                         <label className={`form-label small fw-bold ${theme.subText}`}>Warranty Details</label>
                                         <textarea className={`form-control ${theme.input}`} rows="2" value={newProduct.warranty_details} onChange={e => setNewProduct({...newProduct, warranty_details: e.target.value})}></textarea>
                                     </div>
+                                    
+                                    {/* Active Checkbox in Form */}
+                                    <div className="col-12 mt-3">
+                                        <div className="form-check form-switch">
+                                            <input 
+                                                className="form-check-input" 
+                                                type="checkbox" 
+                                                id="isActiveSwitch"
+                                                checked={newProduct.is_active} 
+                                                onChange={e => setNewProduct({...newProduct, is_active: e.target.checked})} 
+                                            />
+                                            <label className="form-check-label fw-bold" htmlFor="isActiveSwitch">Available for Sale?</label>
+                                        </div>
+                                    </div>
+
                                 </div>
                                 <button type="submit" className="btn btn-primary w-100 mt-4 fw-bold">{editingProduct ? 'Update Product' : 'Create Product'}</button>
                             </form>
