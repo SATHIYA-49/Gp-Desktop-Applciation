@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useContext } from 'react';
 import apiClient from '../api/client';
 import { GlobalContext } from '../context/GlobalState';
+import LowStockAlert from '../components/LowStockAlert'; 
 
 const Inventory = () => {
   const { products, brands, categories, subCategories, loadInventoryData, darkMode } = useContext(GlobalContext);
 
   // --- LOCAL STATE ---
   const [searchTerm, setSearchTerm] = useState('');
+  // 🔥 CHANGED: Default is now 'active' instead of 'all'
+  const [activeTab, setActiveTab] = useState('active'); 
   
   // --- PAGINATION ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -22,7 +25,7 @@ const Inventory = () => {
   // --- FORM DATA ---
   const [newProduct, setNewProduct] = useState({
     name: '', sku: '', brand_id: '', category_id: '', sub_category_id: '', 
-    net_price: '', sell_price: '', warranty_details: '', is_active: true // Added is_active
+    net_price: '', sell_price: '', warranty_details: '', is_active: true
   });
   const [filteredSubs, setFilteredSubs] = useState([]);
   
@@ -64,7 +67,7 @@ const Inventory = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, activeTab]);
 
   // --- HELPER: SHOW ALERT ---
   const showAlert = (type, message) => {
@@ -105,14 +108,20 @@ const Inventory = () => {
   // --- 4. TOGGLE ACTIVE STATUS LOGIC ---
   const toggleActiveStatus = async (product) => {
       try {
-          const newStatus = !product.is_active; // Flip status
+          const newStatus = !product.is_active; 
+          
           // Optimistic update
           product.is_active = newStatus; 
           
-          await apiClient.put(`/inventory/products/${product.id}`, { is_active: newStatus });
+          await apiClient.patch(`/inventory/products/${product.id}/status`, { 
+              is_active: newStatus 
+          });
+
           loadInventoryData(); 
           showAlert('success', `Product marked as ${newStatus ? 'Active' : 'Inactive'}`);
       } catch (err) {
+          console.error(err);
+          product.is_active = !product.is_active; 
           showAlert('danger', "Failed to update status");
       }
   };
@@ -138,15 +147,14 @@ const Inventory = () => {
           warranty_details: product.warranty_details || '',
           is_active: product.is_active ?? true
       });
-      setFilteredSubs(subCategories.filter(s => s.category_id === product.category_id));
+      setFilteredSubs(subCategories.filter(s => String(s.category_id) === String(product.category_id)));
       setShowAddModal(true);
   };
 
   const handleCategoryChange = (e) => {
     const catId = e.target.value; 
     setNewProduct({ ...newProduct, category_id: catId, sub_category_id: '' });
-    // eslint-disable-next-line
-    setFilteredSubs(subCategories.filter(s => s.category_id == catId));
+    setFilteredSubs(subCategories.filter(s => String(s.category_id) === String(catId)));
   };
 
   const submitProduct = async (e) => {
@@ -220,8 +228,7 @@ const Inventory = () => {
     else if (masterTab === 'category') setMasterList(categories);
     else if (masterTab === 'sub-category') {
         if(selectedParentCat) {
-            // eslint-disable-next-line
-            setMasterList(subCategories.filter(s => s.category_id == selectedParentCat));
+            setMasterList(subCategories.filter(s => String(s.category_id) === String(selectedParentCat)));
         } else {
             setMasterList([]);
         }
@@ -266,16 +273,24 @@ const Inventory = () => {
     }
   };
 
-  // --- FILTERING & PAGINATION ---
-  const filteredProducts = products.filter(p => 
+  // --- FILTERING & PAGINATION LOGIC ---
+  const searchFiltered = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.sku && p.sku.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
+  // 🔥 REMOVED 'ALL' OPTION HERE
+  const finalFilteredProducts = searchFiltered.filter(p => {
+      if (activeTab === 'active') return p.is_active === true;
+      if (activeTab === 'inactive') return p.is_active === false;
+      return p.is_active === true; // Default safety fallback
+  });
+
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProducts = filteredProducts.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  const currentProducts = finalFilteredProducts.slice(indexOfFirstItem, indexOfLastItem);
+  
+  const totalPages = Math.ceil(finalFilteredProducts.length / itemsPerPage);
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
   return (
@@ -284,7 +299,8 @@ const Inventory = () => {
         style={{ 
             minHeight: '100vh', 
             transition: 'background 0.3s ease-in-out',
-            background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa'
+            background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa',
+            position: 'relative' 
         }}
     >
       
@@ -307,6 +323,20 @@ const Inventory = () => {
         </div>
       )}
 
+      {/* --- LOW STOCK ALERT (Top Right Modal) --- */}
+      <div 
+          style={{
+              position: 'absolute',
+              top: '90px', 
+              right: '20px',
+              zIndex: 1050,
+              maxWidth: '350px',
+              width: '100%'
+          }}
+      >
+          <LowStockAlert onRestockClick={openRestockModal} />
+      </div>
+
       {/* HEADER */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -323,24 +353,51 @@ const Inventory = () => {
         </div>
       </div>
 
-      {/* SEARCH BAR */}
-      <div className={`card mb-4 p-3 ${theme.card}`}>
-        <div className="input-group">
-            <span className={`input-group-text ${darkMode ? 'bg-dark border-secondary text-light' : 'bg-white border-end-0 text-muted'}`}><i className="bi bi-search"></i></span>
+      {/* CONTROL BAR: TABS (REMOVED 'ALL') & SEARCH */}
+      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+        
+        {/* LEFT: STATUS TABS */}
+        <div className="btn-group shadow-sm" role="group">
+            {/* 🔥 REMOVED THE 'ALL' BUTTON */}
+            <button 
+                type="button" 
+                className={`btn fw-bold px-4 ${activeTab === 'active' ? 'btn-success text-white' : (darkMode ? 'btn-dark border-secondary' : 'btn-light border')}`}
+                onClick={() => setActiveTab('active')}
+            >
+                Active
+            </button>
+            <button 
+                type="button" 
+                className={`btn fw-bold px-4 ${activeTab === 'inactive' ? 'btn-secondary' : (darkMode ? 'btn-dark border-secondary' : 'btn-light border')}`}
+                onClick={() => setActiveTab('inactive')}
+            >
+                Inactive
+            </button>
+        </div>
+
+        {/* RIGHT: MINIMIZED SEARCH */}
+        <div className="position-relative" style={{ width: '300px' }}>
+            <i className={`bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 ${theme.subText}`} style={{zIndex: 5}}></i>
             <input 
                 type="text" 
-                className={`form-control ${theme.input} border-start-0`} 
-                placeholder="Search by Name or SKU..." 
+                className={`form-control rounded-pill ps-5 ${theme.input} shadow-sm`}
+                placeholder="Search products..." 
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
+                style={{height: '45px'}}
             />
             {searchTerm && (
-                <button className={`btn ${darkMode ? 'btn-outline-secondary' : 'btn-outline-secondary'}`} onClick={() => setSearchTerm('')}><i className="bi bi-x-lg"></i></button>
+                <button 
+                    className={`btn btn-sm position-absolute top-50 end-0 translate-middle-y me-2 rounded-circle ${darkMode ? 'text-white' : 'text-secondary'}`} 
+                    onClick={() => setSearchTerm('')}
+                >
+                    <i className="bi bi-x-circle-fill"></i>
+                </button>
             )}
         </div>
       </div>
 
-      {/* PRODUCT TABLE (NO HOVER) */}
+      {/* TABLE */}
       <div className={`card overflow-hidden ${theme.card}`}>
         <div className="table-responsive">
             <table className={`table align-middle mb-0 ${theme.table}`}>
@@ -350,7 +407,7 @@ const Inventory = () => {
                         <th>Brand</th>
                         <th>Category</th>
                         <th>Sub-Cat</th>
-                        <th>Status</th> {/* NEW COLUMN */}
+                        <th>Status</th>
                         <th>Stock</th>
                         <th>Sell Price</th>
                         <th className="text-end pe-4">Actions</th>
@@ -370,14 +427,13 @@ const Inventory = () => {
                                 <td><span className={`badge ${darkMode ? 'bg-secondary' : 'bg-light text-dark border'}`}>{getCatName(p.category_id)}</span></td>
                                 <td><span className={`small ${theme.subText}`}>{getSubName(p.sub_category_id)}</span></td>
                                 
-                                {/* TOGGLE BUTTON (Active/Inactive) */}
                                 <td>
                                     <div className="form-check form-switch">
                                         <input 
                                             className="form-check-input" 
                                             type="checkbox" 
                                             role="switch" 
-                                            checked={p.is_active ?? true} // Default to true if undefined
+                                            checked={p.is_active ?? true} 
                                             onChange={() => toggleActiveStatus(p)}
                                             style={{cursor: 'pointer'}}
                                         />
@@ -407,7 +463,10 @@ const Inventory = () => {
 
         {/* PAGINATION */}
         {totalPages > 1 && (
-            <div className={`card-footer border-top-0 d-flex justify-content-end py-3 ${darkMode ? 'bg-dark border-secondary' : 'bg-white'}`}>
+            <div className={`card-footer border-top-0 d-flex justify-content-between align-items-center py-3 ${darkMode ? 'bg-dark border-secondary' : 'bg-white'}`}>
+                <div className={`small ${theme.subText}`}>
+                    Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, finalFilteredProducts.length)} of {finalFilteredProducts.length} entries
+                </div>
                 <nav>
                     <ul className="pagination pagination-sm mb-0">
                         <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>

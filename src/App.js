@@ -6,7 +6,6 @@ import './App.css';
 // COMPONENTS
 import Sidebar from './components/Sidebar';
 import ServiceNotifier from './components/ServiceNotifier';
-import UpdateProgress from './components/UpdateProgress';
 import LoadingScreen from './components/LoadingScreen';
 
 // PAGES
@@ -70,7 +69,6 @@ const AppContent = () => {
           </Routes>
         </div>
       </div>
-      <UpdateProgress />
     </Router>
   );
 };

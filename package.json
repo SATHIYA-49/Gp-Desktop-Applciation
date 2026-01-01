@@ -1,6 +1,6 @@
 {
   "name": "golden-power",
-  "version": "0.1.1",
+  "version": "0.2.1",
   "main": "main.js",
   "homepage": "./",
   "description": "Golden Power ERP Desktop Application",
@@ -44,8 +44,9 @@
     "eject": "react-scripts eject"
   },
   "build": {
+    "extends": null,
     "appId": "com.goldenpower.erp",
-    "productName": "Golden Power ERP",
+    "productName": "GoldenPower",
     "asar": true,
     "artifactName": "${productName}-Setup-${version}.${ext}",
     "publish": [
