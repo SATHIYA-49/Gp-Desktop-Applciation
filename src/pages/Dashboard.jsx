@@ -81,8 +81,10 @@ const StatCard = ({ title, value, icon, color, trend, trendValue, onClick }) => 
 
 // --- MAIN DASHBOARD PAGE ---
 const Dashboard = () => {
-  const { darkMode, customers, products, billingHistory } = useContext(GlobalContext);
+  const { darkMode, customers, billingHistory } = useContext(GlobalContext);
   const navigate = useNavigate();
+  
+  // 🔥 FIXED: Removed the unused 'localProductStats' state here
   
   const [metrics, setMetrics] = useState({
     customers: 0, sales: 0, profit: 0, services: 0, lowStock: 0
@@ -91,7 +93,7 @@ const Dashboard = () => {
   const [upcomingTasks, setUpcomingTasks] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // --- 1. DATA PROCESSING ---
+  // --- 1. DATA PROCESSING (Chart) ---
   const chartData = useMemo(() => {
     if (!Array.isArray(billingHistory)) return [];
 
@@ -101,22 +103,14 @@ const Dashboard = () => {
     };
 
     const revenueByMonth = {};
-    const profitByMonth = {};
+    const profitByMonth = {}; 
 
     billingHistory.forEach(bill => {
         const month = getMonthKey(bill.created_at || bill.date); 
         const revenue = Number(bill.final_amount) || Number(bill.total_amount) || 0;
         
-        let billCost = 0;
-        if (Array.isArray(bill.items)) {
-            bill.items.forEach(item => {
-                const product = products.find(p => p.id === item.product_id);
-                const costPrice = product ? Number(product.purchase_price) : 0;
-                const qty = Number(item.quantity) || 1;
-                billCost += (costPrice * qty);
-            });
-        }
-        const profit = revenue - billCost;
+        // Approximate profit estimate (20%) since full product cost isn't loaded globally
+        const profit = revenue * 0.2; 
 
         revenueByMonth[month] = (revenueByMonth[month] || 0) + revenue;
         profitByMonth[month] = (profitByMonth[month] || 0) + profit;
@@ -132,33 +126,30 @@ const Dashboard = () => {
         Profit: profitByMonth[month] || 0
     }));
 
-  }, [billingHistory, products]);
+  }, [billingHistory]);
 
   // --- 2. METRICS & NOTIFICATIONS ---
   useEffect(() => {
     const calculateMetrics = async () => {
         const totalCustomers = Array.isArray(customers) ? customers.length : 0;
-        const lowStockCount = Array.isArray(products) 
-            ? products.filter(p => p.stock_quantity <= (p.low_stock_limit || 5)).length 
-            : 0;
         
+        // 1. Fetch Product Stats Independently (Count & Low Stock)
+        let lowStockCount = 0;
+        try {
+            // Fetch active products with a high limit to check stock status
+            const res = await apiClient.get('/inventory/products?limit=1000&status=active'); 
+            if(res.data && Array.isArray(res.data.data)) {
+                 lowStockCount = res.data.data.filter(p => p.stock_quantity <= (p.low_stock_limit || 5)).length;
+            }
+        } catch (err) {
+            console.warn("Could not fetch product stats for dashboard");
+        }
+
         const totalRevenue = Array.isArray(billingHistory) 
             ? billingHistory.reduce((acc, curr) => acc + (Number(curr.final_amount) || Number(curr.total_amount) || 0), 0)
             : 0;
 
-        const totalCost = Array.isArray(billingHistory)
-            ? billingHistory.reduce((accBill, bill) => {
-                if(!Array.isArray(bill.items)) return accBill;
-                const billCost = bill.items.reduce((accItem, item) => {
-                    const prod = products.find(p => p.id === item.product_id);
-                    const cost = prod ? (Number(prod.purchase_price) || 0) : 0;
-                    return accItem + (cost * (Number(item.quantity) || 1));
-                }, 0);
-                return accBill + billCost;
-            }, 0)
-            : 0;
-        
-        const totalProfit = totalRevenue - totalCost;
+        const totalProfit = totalRevenue * 0.2; // 20% Estimate
 
         let serviceCount = 0;
         
@@ -181,14 +172,10 @@ const Dashboard = () => {
 
                 // --- ALERT LOGIC ---
                 if (tomorrowServices.length > 0) {
-                    
-                    // 1. PLAY POP SOUND (Local File)
-                    // Ensure 'pop.mp3' exists in your 'public' folder
                     const sound = new Audio('/pop.mp3'); 
                     sound.volume = 0.5;
                     sound.play().catch(e => console.warn("Auto-play blocked:", e));
 
-                    // 2. SHOW TOAST
                     const Toast = Swal.mixin({
                         toast: true,
                         position: 'top-end',
@@ -218,7 +205,7 @@ const Dashboard = () => {
         setMetrics({ customers: totalCustomers, sales: totalRevenue, profit: totalProfit, services: serviceCount, lowStock: lowStockCount });
     };
     calculateMetrics();
-  }, [customers, products, billingHistory, darkMode]);
+  }, [customers, billingHistory, darkMode]);
 
   const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
 

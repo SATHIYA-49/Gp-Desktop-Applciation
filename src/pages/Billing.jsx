@@ -11,9 +11,11 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
     const [search, setSearch] = useState('');
     const wrapperRef = useRef(null);
 
-    const selectedItem = options.find(opt => opt.value === value);
+    // Safe check for options
+    const safeOptions = Array.isArray(options) ? options : [];
+    const selectedItem = safeOptions.find(opt => opt.value === value);
 
-    const filteredOptions = options.filter(opt => 
+    const filteredOptions = safeOptions.filter(opt => 
         opt.label.toLowerCase().includes(search.toLowerCase()) || 
         opt.subLabel?.toLowerCase().includes(search.toLowerCase())
     );
@@ -103,9 +105,11 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
 // 2. MAIN BILLING COMPONENT
 // ==========================================
 const Billing = () => {
-  const { customers, products, billingHistory, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
+  // 🔥 UPDATED: Removed 'products' from global context destructuring
+  const { customers, billingHistory, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
 
-  // --- STATES ---
+  // --- LOCAL STATES ---
+  const [products, setProducts] = useState([]); // Fetch products locally
   const [custId, setCustId] = useState('');
   
   // Service States
@@ -133,6 +137,25 @@ const Billing = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [paidError, setPaidError] = useState(''); 
 
+  // --- 1. FETCH PRODUCTS LOCALLY (Since removed from GlobalState) ---
+  useEffect(() => {
+    const fetchProducts = async () => {
+        try {
+            // Fetching a larger limit for dropdown (or implement server-search later)
+            const res = await apiClient.get('/inventory/products?limit=500&status=active');
+            if (res.data && Array.isArray(res.data.data)) {
+                setProducts(res.data.data);
+            } else {
+                setProducts([]);
+            }
+        } catch (err) {
+            console.error("Billing: Error loading products", err);
+            setProducts([]);
+        }
+    };
+    fetchProducts();
+  }, []);
+
   // --- THEME ENGINE ---
   const theme = {
     container: darkMode ? 'bg-dark' : 'bg-light',
@@ -149,13 +172,14 @@ const Billing = () => {
     badge: darkMode ? 'bg-secondary text-white' : 'bg-light text-dark'
   };
 
-  const customerOptions = customers.map(c => ({
+  // --- DATA MAPPING (SAFE CHECKS ADDED) ---
+  const customerOptions = (customers || []).map(c => ({
       value: c.id,
       label: c.name,
       subLabel: c.phone
   }));
 
-  const productOptions = products.map(p => ({
+  const productOptions = (products || []).map(p => ({
       value: p.id,
       label: p.name,
       subLabel: `Stock: ${p.stock_quantity} | ₹${p.sell_price}`
@@ -171,7 +195,7 @@ const Billing = () => {
     return dLocal.toISOString().split('T')[0];
   };
 
-  const todaysBills = billingHistory.filter(h => {
+  const todaysBills = (billingHistory || []).filter(h => {
      const billDate = h.sale_date || h.created_at || '';
      return billDate.startsWith(getTodayStr());
   });
@@ -223,7 +247,6 @@ const Billing = () => {
     }, 0);
   };
 
-  // --- FIXED: ADD TO CART FUNCTION ---
   const addToCart = (e) => {
     e.preventDefault();
     if (!selectedProduct) return;
@@ -264,8 +287,6 @@ const Billing = () => {
 
     // 3. MERGE OR ADD TO CART
     setCart(prevCart => {
-        // Check if item exists (Same Product & Same Price/Discount config)
-        // If price/discount is different, we add as new row. If same, we merge.
         const existingIdx = prevCart.findIndex(item => 
             item.product_id === newItem.product_id && 
             item.final_price === newItem.final_price
@@ -641,7 +662,6 @@ const Billing = () => {
             </div>
           </div>
         </div>
-
       </div>
 
       {/* STYLES */}

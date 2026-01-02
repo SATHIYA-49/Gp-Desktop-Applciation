@@ -5,10 +5,17 @@ const LowStockAlert = ({ onRestockClick }) => {
   const { products, darkMode } = useContext(GlobalContext);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // 🔥 CRITICAL FIX: Safety check
+  // If products is null, undefined, or an object (from pagination), default to empty array []
+  const safeProducts = Array.isArray(products) ? products : [];
+
   // 1. FILTER LOGIC
   const LIMIT = 5;
-  const outOfStock = products.filter(p => p.stock_quantity === 0 && p.is_active);
-  const lowStock = products.filter(p => p.stock_quantity > 0 && p.stock_quantity <= LIMIT && p.is_active);
+  
+  // Use 'safeProducts' instead of 'products'
+  const outOfStock = safeProducts.filter(p => p.stock_quantity === 0 && p.is_active);
+  const lowStock = safeProducts.filter(p => p.stock_quantity > 0 && p.stock_quantity <= LIMIT && p.is_active);
+  
   const totalIssues = outOfStock.length + lowStock.length;
 
   // If healthy, hide completely
@@ -25,11 +32,11 @@ const LowStockAlert = ({ onRestockClick }) => {
         fontFamily: "'Inter', sans-serif"
       }}
     >
-      {/* --- POPUP HEADER (Window Title Bar) --- */}
+      {/* --- POPUP HEADER --- */}
       <div 
         className="d-flex justify-content-between align-items-center px-3 py-2"
         style={{
-            background: 'linear-gradient(90deg, #ef4444, #dc2626)', // Red Gradient
+            background: 'linear-gradient(90deg, #ef4444, #dc2626)',
             color: 'white'
         }}
       >
@@ -41,7 +48,6 @@ const LowStockAlert = ({ onRestockClick }) => {
             <span className="badge bg-white text-danger rounded-pill border-0" style={{fontSize: '0.75rem'}}>{totalIssues}</span>
         </div>
 
-        {/* Toggle / Minimize Button */}
         <button 
             className="btn btn-sm text-white p-0 border-0" 
             onClick={() => setIsExpanded(!isExpanded)}
@@ -54,7 +60,7 @@ const LowStockAlert = ({ onRestockClick }) => {
       {/* --- POPUP BODY --- */}
       <div className="p-0">
         
-        {/* Summary (Show when collapsed) */}
+        {/* Summary (Collapsed) */}
         {!isExpanded && (
             <div className="p-3 d-flex justify-content-between align-items-center">
                 <div>
@@ -75,12 +81,12 @@ const LowStockAlert = ({ onRestockClick }) => {
             </div>
         )}
 
-        {/* Detailed List (Show when expanded) */}
+        {/* Detailed List (Expanded) */}
         {isExpanded && (
             <>
                 <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
                     <ul className="list-group list-group-flush">
-                        {/* Out of Stock Items */}
+                        {/* Out of Stock */}
                         {outOfStock.map(p => (
                             <li key={p.id} className={`list-group-item d-flex justify-content-between align-items-center px-3 py-2 ${darkMode ? 'bg-dark text-white border-secondary' : 'bg-white'}`}>
                                 <div style={{maxWidth: '65%'}}>
@@ -100,7 +106,7 @@ const LowStockAlert = ({ onRestockClick }) => {
                             </li>
                         ))}
 
-                        {/* Low Stock Items */}
+                        {/* Low Stock */}
                         {lowStock.map(p => (
                             <li key={p.id} className={`list-group-item d-flex justify-content-between align-items-center px-3 py-2 ${darkMode ? 'bg-dark text-white border-secondary' : 'bg-white'}`}>
                                 <div style={{maxWidth: '65%'}}>

@@ -70,6 +70,8 @@ const Sidebar = () => {
       fontSize: '1.2rem',
       boxShadow: '0 8px 16px -4px rgba(245, 158, 11, 0.4)',
       zIndex: 2,
+      position: 'relative',
+      overflow: 'hidden'
     },
 
     brandDetails: {
@@ -87,10 +89,9 @@ const Sidebar = () => {
       overflowX: 'hidden',
       paddingRight: '0px',
       paddingTop: '10px',
-      display: 'block' // Ensures list behaves like a block
+      display: 'block' 
     },
 
-    // FIX: Force block display to prevent flex-row collision
     navItem: {
       marginBottom: '6px',
       padding: '0 16px',
@@ -118,7 +119,7 @@ const Sidebar = () => {
       transition: 'all 0.25s ease',
       cursor: 'pointer',
       userSelect: 'none',
-      width: '100%' // Ensure full width
+      width: '100%' 
     }),
 
     icon: (isActive) => ({
@@ -149,13 +150,12 @@ const Sidebar = () => {
       transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)'
     }),
 
-    // SIMPLIFIED ANIMATION TO PREVENT CRASH
     subMenuContainer: (isOpen) => ({
       height: (isOpen && !isSidebarCollapsed) ? 'auto' : '0',
       maxHeight: (isOpen && !isSidebarCollapsed) ? '500px' : '0',
       opacity: (isOpen && !isSidebarCollapsed) ? 1 : 0,
       overflow: 'hidden',
-      transition: 'max-height 0.4s ease, opacity 0.3s ease', // Removed transform to fix stacking issues
+      transition: 'max-height 0.4s ease, opacity 0.3s ease',
       marginBottom: (isOpen && !isSidebarCollapsed) ? '10px' : '0', 
     }),
 
@@ -182,9 +182,9 @@ const Sidebar = () => {
       
       {/* BRAND HEADER */}
       <div style={styles.brandContainer}>
-        <div style={styles.brandLogo}>GP</div>
+        <div style={styles.brandLogo} className="spark-logo">GP</div>
         <div style={styles.brandDetails}>
-            <div style={{...styles.brandText, color: darkMode ? '#fff' : '#000'}}>GOLDEN POWER</div>
+            <div style={{...styles.brandText, color: darkMode ? '#fff' : '#000', fontWeight:'bold'}}>GOLDEN POWER</div>
             <div style={{ fontSize: '0.7rem', fontWeight: '500', color: '#f59e0b', marginTop: '-2px' }}>
                 ENTERPRISE
             </div>
@@ -192,12 +192,12 @@ const Sidebar = () => {
       </div>
 
       {/* NAVIGATION */}
-      {/* Removed 'nav' class to prevent Bootstrap interference */}
       <ul className="list-unstyled mb-auto sidebar-scroll" style={styles.scrollArea}>
         
         {/* 1. DASHBOARD */}
         <li style={styles.navItem}>
-          <NavLink to="/dashboard" style={({ isActive }) => styles.link(isActive)}>
+          {/* 🔥 Added 'nav-item-spark' class here */}
+          <NavLink to="/dashboard" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-grid-fill" style={styles.icon(isActive)}></i>
@@ -209,7 +209,7 @@ const Sidebar = () => {
 
         {/* 2. CUSTOMERS */}
         <li style={styles.navItem}>
-          <NavLink to="/customers" style={({ isActive }) => styles.link(isActive)}>
+          <NavLink to="/customers" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-people-fill" style={styles.icon(isActive)}></i>
@@ -221,7 +221,7 @@ const Sidebar = () => {
 
         {/* 3. INVENTORY */}
         <li style={styles.navItem}>
-          <NavLink to="/inventory" style={({ isActive }) => styles.link(isActive)}>
+          <NavLink to="/inventory" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-box-seam" style={styles.icon(isActive)}></i>
@@ -233,7 +233,7 @@ const Sidebar = () => {
 
         {/* 4. SERVICE MANAGEMENT */}
         <li style={styles.navItem}>
-          <NavLink to="/services" style={({ isActive }) => styles.link(isActive)}>
+          <NavLink to="/services" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-tools" style={styles.icon(isActive)}></i>
@@ -245,7 +245,7 @@ const Sidebar = () => {
 
         {/* 5. EMPLOYEE MANAGEMENT */}
         <li style={styles.navItem}>
-          <NavLink to="/employees" style={({ isActive }) => styles.link(isActive)}>
+          <NavLink to="/employees" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-person-badge" style={styles.icon(isActive)}></i>
@@ -259,6 +259,7 @@ const Sidebar = () => {
         <li style={{...styles.navItem, padding: 0}}>
           <div style={{padding: '0 16px'}}>
             <div 
+                className="nav-item-spark" // 🔥 Spark on Parent Item
                 style={styles.link(activeMenu === 'billing')} 
                 onClick={() => handleMenuClick('billing')}
             >
@@ -270,15 +271,15 @@ const Sidebar = () => {
 
           <div style={styles.subMenuContainer(activeMenu === 'billing')}>
             <div className="d-flex flex-column">
-              <NavLink to="/billing" style={({ isActive }) => styles.subLink(isActive)}>Create Bill</NavLink>
-              <NavLink to="/view-bills" style={({ isActive }) => styles.subLink(isActive)}>Sales History</NavLink>
+              <NavLink to="/billing" className="nav-item-spark" style={({ isActive }) => styles.subLink(isActive)}>Create Bill</NavLink>
+              <NavLink to="/view-bills" className="nav-item-spark" style={({ isActive }) => styles.subLink(isActive)}>Sales History</NavLink>
             </div>
           </div>
         </li>
 
         {/* 7. ACCOUNTS */}
         <li style={styles.navItem}>
-          <NavLink to="/accounts" style={({ isActive }) => styles.link(isActive)}>
+          <NavLink to="/accounts" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-wallet2" style={styles.icon(isActive)}></i>
@@ -292,6 +293,7 @@ const Sidebar = () => {
         <li style={{...styles.navItem, padding: 0}}>
           <div style={{padding: '0 16px'}}>
             <div 
+                className="nav-item-spark" // 🔥 Spark on Parent Item
                 style={styles.link(activeMenu === 'reports')} 
                 onClick={() => handleMenuClick('reports')}
             >
@@ -303,16 +305,16 @@ const Sidebar = () => {
 
           <div style={styles.subMenuContainer(activeMenu === 'reports')}>
             <div className="d-flex flex-column">
-              <NavLink to="/reports/financial" style={({ isActive }) => styles.subLink(isActive)}>Financial Report</NavLink>
-              <NavLink to="/reports/inventory" style={({ isActive }) => styles.subLink(isActive)}>Inventory Report</NavLink>
-              <NavLink to="/reports/service" style={({ isActive }) => styles.subLink(isActive)}>Service Report</NavLink>
+              <NavLink to="/reports/financial" className="nav-item-spark" style={({ isActive }) => styles.subLink(isActive)}>Financial Report</NavLink>
+              <NavLink to="/reports/inventory" className="nav-item-spark" style={({ isActive }) => styles.subLink(isActive)}>Inventory Report</NavLink>
+              <NavLink to="/reports/service" className="nav-item-spark" style={({ isActive }) => styles.subLink(isActive)}>Service Report</NavLink>
             </div>
           </div>
         </li>
 
         {/* 9. SETTINGS */}
         <li style={styles.navItem}>
-          <NavLink to="/settings" style={({ isActive }) => styles.link(isActive)}>
+          <NavLink to="/settings" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
                 <i className="bi bi-gear-fill" style={styles.icon(isActive)}></i>
@@ -324,15 +326,72 @@ const Sidebar = () => {
 
       </ul>
 
-      {/* --- INJECT CSS TO HIDE SCROLLBAR --- */}
+      {/* --- INJECT CSS FOR SPARK ANIMATION --- */}
       <style>
         {`
-          .sidebar-scroll::-webkit-scrollbar {
-            display: none;
+          .sidebar-scroll::-webkit-scrollbar { display: none; }
+          .sidebar-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+          /* 🔥 ELECTRIC SPARK ANIMATION FOR LOGO (Infinite) */
+          @keyframes electricShine {
+            0% { left: -150%; opacity: 0; }
+            30% { opacity: 0.8; }
+            40% { left: 150%; opacity: 0; } 
+            100% { left: 150%; opacity: 0; }
           }
-          .sidebar-scroll {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
+
+          /* 🔥 ELECTRIC SPARK ANIMATION FOR MENU ITEMS (On Hover) */
+          @keyframes electricShineHover {
+            0% { left: -150%; opacity: 0; }
+            50% { opacity: 0.5; }
+            100% { left: 150%; opacity: 0; }
+          }
+
+          @keyframes electricPulse {
+            0% { transform: scale(1); box-shadow: 0 8px 16px -4px rgba(245, 158, 11, 0.4); }
+            15% { transform: scale(1.05); box-shadow: 0 0 15px rgba(245, 158, 11, 0.8); }
+            30% { transform: scale(1); box-shadow: 0 8px 16px -4px rgba(245, 158, 11, 0.4); }
+            100% { transform: scale(1); }
+          }
+
+          .spark-logo {
+            position: relative;
+            overflow: hidden;
+            animation: electricPulse 4s infinite ease-in-out;
+          }
+
+          .spark-logo::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -150%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+            transform: skewX(-20deg);
+            animation: electricShine 4s infinite;
+          }
+
+          /* 🔥 NAV ITEM SPARK CSS */
+          .nav-item-spark {
+            position: relative;
+            overflow: hidden;
+          }
+          
+          .nav-item-spark::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -150%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+            transform: skewX(-20deg);
+            transition: none;
+          }
+
+          .nav-item-spark:hover::after {
+            animation: electricShineHover 0.7s ease-in-out;
           }
         `}
       </style>

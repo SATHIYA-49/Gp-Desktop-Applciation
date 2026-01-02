@@ -1,15 +1,16 @@
 {
   "name": "golden-power",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "main": "main.js",
   "homepage": "./",
-  "description": "Golden Power ERP Desktop Application",
+  "description": "Golden Power",
   "author": "Golden Power",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SATHIYA-49/Gp-Desktop-Applciation.git"
   },
   "dependencies": {
+    "@lottiefiles/dotlottie-react": "^0.17.12",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
@@ -19,6 +20,7 @@
     "bootstrap-icons": "^1.13.1",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
+    "lottie-react": "^2.4.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "react-hot-toast": "^2.6.0",

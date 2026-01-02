@@ -9,6 +9,10 @@ const ServiceReports = () => {
   const [tasks, setTasks] = useState([]); 
   const [loading, setLoading] = useState(true);
   
+  // --- PAGINATION STATE ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 5;
+
   // --- FILTER STATE ---
   const [filter, setFilter] = useState('today'); 
   const [customStart, setCustomStart] = useState('');
@@ -42,19 +46,17 @@ const ServiceReports = () => {
       try {
         let params = { filter_type: filter };
 
-        // 1. If Today: Send LOCAL date (Fixes Timezone Issue)
         if (filter === 'today') {
             params.start_date = getLocalDate(); 
         }
-        // 2. If Custom: Send selected range
         else if (filter === 'custom') {
             params.start_date = customStart;
             params.end_date = customEnd;
         }
 
-        // 3. Call Backend
         const res = await apiClient.get(`/reports/services`, { params });
         setTasks(res.data); 
+        setCurrentPage(1); // Reset pagination on filter change
 
       } catch (err) {
         console.error("Failed to load reports", err);
@@ -88,6 +90,13 @@ const ServiceReports = () => {
     typeStats[type] = (typeStats[type] || 0) + 1;
   });
 
+  // --- PAGINATION LOGIC (Technician Table) ---
+  const techNames = Object.keys(techStats);
+  const totalPages = Math.ceil(techNames.length / itemsPerPage);
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentTechs = techNames.slice(indexOfFirstItem, indexOfLastItem);
+
   return (
     <div className="container-fluid p-4" style={{ minHeight: '100vh', background: theme.container }}>
       
@@ -100,32 +109,15 @@ const ServiceReports = () => {
         
         {/* FILTER BAR */}
         <div className="d-flex flex-wrap gap-2 align-items-center">
-            {/* Custom Date Inputs */}
             {filter === 'custom' && (
                 <div className="d-flex gap-2 animate__animated animate__fadeIn">
-                    <input 
-                        type="date" 
-                        className={`form-control form-control-sm fw-bold ${theme.input}`} 
-                        value={customStart} 
-                        onChange={e => setCustomStart(e.target.value)} 
-                    />
+                    <input type="date" className={`form-control form-control-sm fw-bold ${theme.input}`} value={customStart} onChange={e => setCustomStart(e.target.value)} />
                     <span className={theme.text}>-</span>
-                    <input 
-                        type="date" 
-                        className={`form-control form-control-sm fw-bold ${theme.input}`} 
-                        value={customEnd} 
-                        onChange={e => setCustomEnd(e.target.value)} 
-                    />
+                    <input type="date" className={`form-control form-control-sm fw-bold ${theme.input}`} value={customEnd} onChange={e => setCustomEnd(e.target.value)} />
                 </div>
             )}
 
-            {/* Filter Dropdown */}
-            <select 
-                className={`form-select fw-bold shadow-sm ${theme.input}`} 
-                value={filter} 
-                onChange={(e) => setFilter(e.target.value)}
-                style={{ width: '160px' }}
-            >
+            <select className={`form-select fw-bold shadow-sm ${theme.input}`} value={filter} onChange={(e) => setFilter(e.target.value)} style={{ width: '160px' }}>
                 <option value="today">Today</option>
                 <option value="this_week">This Week</option>
                 <option value="this_month">This Month</option>
@@ -193,11 +185,19 @@ const ServiceReports = () => {
 
       <div className="row g-4">
         
-        {/* 2. TECHNICIAN PERFORMANCE */}
+        {/* 2. TECHNICIAN PERFORMANCE (PAGINATED) */}
         <div className="col-lg-6">
             <div className={`card h-100 ${theme.card}`}>
-                <div className={`card-header py-3 ${theme.cardHeader}`}>
+                <div className={`card-header py-3 ${theme.cardHeader} d-flex justify-content-between align-items-center`}>
                     <h6 className="fw-bold m-0">Technician Performance</h6>
+                    {/* Pagination Controls */}
+                    {totalPages > 1 && (
+                        <div className="btn-group btn-group-sm">
+                            <button className={`btn ${darkMode ? 'btn-outline-light' : 'btn-outline-dark'}`} disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)}><i className="bi bi-chevron-left"></i></button>
+                            <span className={`btn ${darkMode ? 'btn-outline-light' : 'btn-outline-dark'} disabled fw-bold`} style={{opacity: 1}}>{currentPage} / {totalPages}</span>
+                            <button className={`btn ${darkMode ? 'btn-outline-light' : 'btn-outline-dark'}`} disabled={currentPage === totalPages} onClick={() => setCurrentPage(prev => prev + 1)}><i className="bi bi-chevron-right"></i></button>
+                        </div>
+                    )}
                 </div>
                 <div className="card-body p-0">
                     <div className="table-responsive">
@@ -211,10 +211,10 @@ const ServiceReports = () => {
                                 </tr>
                             </thead>
                             <tbody className={darkMode ? 'border-secondary' : ''}>
-                                {Object.keys(techStats).length === 0 ? (
+                                {techNames.length === 0 ? (
                                     <tr><td colSpan="4" className={`text-center py-4 ${theme.subText}`}>No data for selected period.</td></tr>
                                 ) : (
-                                    Object.keys(techStats).map(tech => {
+                                    currentTechs.map(tech => {
                                         const stats = techStats[tech];
                                         const rate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
                                         return (
@@ -247,7 +247,7 @@ const ServiceReports = () => {
                 <div className={`card-header py-3 ${theme.cardHeader}`}>
                     <h6 className="fw-bold m-0">Task Types Distribution</h6>
                 </div>
-                <div className="card-body p-4">
+                <div className="card-body p-4" style={{maxHeight: '400px', overflowY: 'auto'}}>
                     {Object.keys(typeStats).length === 0 ? (
                         <p className={`text-center my-5 ${theme.subText}`}>No tasks found for selected period.</p>
                     ) : (

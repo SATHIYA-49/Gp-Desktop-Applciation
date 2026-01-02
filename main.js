@@ -28,7 +28,7 @@ function createWindow() {
     }
   });
 
-  // 🔥 VERY IMPORTANT FIX (BLANK SCREEN ISSUE)
+  // 🔥 FIX BLANK SCREEN
   if (!app.isPackaged) {
     win.loadURL("http://localhost:3000");
   } else {
@@ -38,7 +38,6 @@ function createWindow() {
 
   win.once("ready-to-show", () => {
     win.show();
-
     // Auto update only in production
     if (app.isPackaged) {
       setTimeout(() => {
@@ -70,11 +69,23 @@ ipcMain.handle("get-app-version", () => {
   return app.getVersion();
 });
 
-// Manual update check (Settings page)
+// Manual update check
 ipcMain.on("manual-check-update", () => {
   if (app.isPackaged) {
     autoUpdater.checkForUpdates();
   }
+});
+
+// ✅ ADDED: Handle Download Click
+ipcMain.on("start-download", () => {
+  log.info("User requested download...");
+  autoUpdater.downloadUpdate();
+});
+
+// ✅ ADDED: Handle Restart Click
+ipcMain.on("restart-app", () => {
+  log.info("User requested restart...");
+  autoUpdater.quitAndInstall();
 });
 
 /* =========================
@@ -86,23 +97,12 @@ autoUpdater.on("checking-for-update", () => {
   log.info("Checking for updates...");
 });
 
-// Update available
+// Update available -> Send to React (No Native Dialog)
 autoUpdater.on("update-available", info => {
   log.info("Update available:", info.version);
-
-  dialog
-    .showMessageBox(win, {
-      type: "info",
-      title: "Update Available",
-      message: `New version ${info.version} is available.\n\nDownload now?`,
-      buttons: ["Download", "Later"],
-      cancelId: 1
-    })
-    .then(result => {
-      if (result.response === 0) {
-        autoUpdater.downloadUpdate();
-      }
-    });
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("update-available", info);
+  }
 });
 
 // No update
@@ -110,33 +110,21 @@ autoUpdater.on("update-not-available", () => {
   log.info("No updates available");
 });
 
-// Download progress
+// Download progress -> Send to React
 autoUpdater.on("download-progress", progress => {
   const percent = Math.round(progress.percent);
   log.info(`Downloading ${percent}%`);
-
   if (win && !win.isDestroyed()) {
     win.webContents.send("update-progress", percent);
   }
 });
 
-// Downloaded
+// Downloaded -> Send to React
 autoUpdater.on("update-downloaded", () => {
   log.info("Update downloaded");
-
-  dialog
-    .showMessageBox(win, {
-      type: "question",
-      title: "Install Update",
-      message: "Update ready. Restart now?",
-      buttons: ["Restart", "Later"],
-      cancelId: 1
-    })
-    .then(result => {
-      if (result.response === 0) {
-        autoUpdater.quitAndInstall();
-      }
-    });
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("update-downloaded");
+  }
 });
 
 // Errors

@@ -31,15 +31,14 @@ const CustomerFormModal = ({ customer, onClose, onSuccess, theme }) => {
     }
   }, [customer]);
 
-  const checkPhone = async (phone) => {
-    if (!phone || phone.length < 10) {
-      setPhoneStatus({ loading: false, error: null, valid: false });
-      return;
-    }
-    if (customer && phone === customer.phone) {
+  // --- LIVE CHECK FUNCTION ---
+  const checkPhoneExistence = async (phone) => {
+    // If editing and phone is same as original, it's valid
+    if (customer && customer.phone === phone) {
         setPhoneStatus({ loading: false, error: null, valid: true });
         return;
     }
+
     setPhoneStatus({ loading: true, error: null, valid: false });
     try {
       const res = await apiClient.get(`/customers/check-phone?phone=${phone}`);
@@ -53,11 +52,41 @@ const CustomerFormModal = ({ customer, onClose, onSuccess, theme }) => {
     }
   };
 
+  // --- HANDLE TYPING ---
+  const handlePhoneChange = (e) => {
+      // 1. Regex: Allow only digits
+      const val = e.target.value.replace(/\D/g, '');
+      
+      // 2. Limit to 10 digits
+      if (val.length <= 10) {
+          setFormData({ ...formData, phone: val });
+
+          // 3. Reset status if incomplete
+          if (val.length < 10) {
+              setPhoneStatus({ loading: false, error: null, valid: false });
+          }
+
+          // 4. Trigger check exactly at 10
+          if (val.length === 10) {
+              checkPhoneExistence(val);
+          }
+      }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (phoneStatus.error) return;
-    setIsSubmitting(true);
+    
+    // Final validation before submit
+    if (formData.phone.length !== 10) {
+        toast.error("Phone number must be exactly 10 digits.");
+        return;
+    }
+    if (phoneStatus.error) {
+        toast.error(phoneStatus.error);
+        return;
+    }
 
+    setIsSubmitting(true);
     try {
       if (customer) {
         await apiClient.put(`/customers/${customer.id}`, formData);
@@ -91,20 +120,35 @@ const CustomerFormModal = ({ customer, onClose, onSuccess, theme }) => {
                   <label className={`small fw-bold mb-1 ${theme.subText}`}>Full Name</label>
                   <input type="text" className={`form-control py-2 ${theme.input}`} placeholder="e.g. John Doe" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
                 </div>
+                
+                {/* PHONE INPUT */}
                 <div className="mb-3">
-                  <label className={`small fw-bold mb-1 ${theme.subText}`}>Phone Number</label>
+                  <label className={`small fw-bold mb-1 ${theme.subText}`}>Phone Number (10 Digits)</label>
                   <div className="input-group">
-                    <input type="tel" className={`form-control py-2 ${theme.input} ${phoneStatus.error ? 'is-invalid' : ''} ${phoneStatus.valid ? 'is-valid' : ''}`} placeholder="e.g. 9876543210" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} onBlur={(e) => checkPhone(e.target.value)} required />
+                    <span className={`input-group-text ${theme.inputIcon}`}>+91</span>
+                    <input 
+                        type="text" 
+                        inputMode="numeric"
+                        className={`form-control py-2 ${theme.input} ${phoneStatus.error ? 'is-invalid' : ''} ${phoneStatus.valid ? 'is-valid' : ''}`} 
+                        placeholder="9876543210" 
+                        value={formData.phone} 
+                        onChange={handlePhoneChange} 
+                        required 
+                    />
                     {phoneStatus.loading && <span className={`input-group-text ${theme.inputIcon}`}><div className="spinner-border spinner-border-sm"></div></span>}
                   </div>
-                  {phoneStatus.error && <div className="text-danger small mt-1 fw-bold">{phoneStatus.error}</div>}
-                  {phoneStatus.valid && <div className="text-success small mt-1 fw-bold">Valid Number</div>}
+                  {/* Validation Messages */}
+                  <div className="d-flex justify-content-between mt-1">
+                      {phoneStatus.error && <small className="text-danger fw-bold">{phoneStatus.error}</small>}
+                      {phoneStatus.valid && <small className="text-success fw-bold"></small>}
+                  </div>
                 </div>
+
                 <div className="mb-4">
                   <label className={`small fw-bold mb-1 ${theme.subText}`}>Address</label>
                   <textarea className={`form-control py-2 ${theme.input}`} rows="3" placeholder="Address..." value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} />
                 </div>
-                <button disabled={isSubmitting || phoneStatus.error} className="btn btn-primary w-100 fw-bold py-2 rounded-pill shadow-sm">
+                <button disabled={isSubmitting || phoneStatus.error || formData.phone.length !== 10} className="btn btn-primary w-100 fw-bold py-2 rounded-pill shadow-sm">
                   {isSubmitting ? 'Saving...' : (customer ? 'Update Changes' : 'Save Customer')}
                 </button>
               </form>
@@ -115,7 +159,6 @@ const CustomerFormModal = ({ customer, onClose, onSuccess, theme }) => {
     </>
   );
 };
-
 
 // ==========================================
 // 2. MAIN COMPONENT: CUSTOMERS LIST
@@ -162,7 +205,7 @@ const Customers = () => {
     closeBtn: darkMode ? 'btn-close-white' : ''
   };
 
-  // --- THIS WAS MISSING: LOAD DATA ON START ---
+  // --- LOAD DATA ON START ---
   useEffect(() => {
     loadCustomers(); 
   }, [loadCustomers]);
