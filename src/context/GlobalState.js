@@ -18,16 +18,21 @@ export const GlobalProvider = ({ children }) => {
 
   // --- 2. DATA STATES ---
   const [customers, setCustomers] = useState([]);
-  // 🔥 NOTE: 'products' removed from Global State. 
-  // Products are now fetched via Server-Side Pagination in Inventory.jsx for performance.
   
+  // Inventory Master Data
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
   
+  // Billing & Reports
   const [billingHistory, setBillingHistory] = useState([]);
   const [debtors, setDebtors] = useState([]);
   const [reports, setReports] = useState([]);
+
+  // Services & Warranties
+  const [upcomingServices, setUpcomingServices] = useState([]);
+  // 🔥 NEW: Warranty State
+  const [warranties, setWarranties] = useState([]); 
 
   // ==================================================
   // 3. ACTIONS (Memoized)
@@ -49,11 +54,9 @@ export const GlobalProvider = ({ children }) => {
   // 4. DATA FETCHING (Memoized)
   // ==================================================
 
-  // Generic helper to avoid repetition
   const fetchData = useCallback(async (endpoint, setter) => {
     try {
       const res = await apiClient.get(endpoint);
-      // Safety check for different response structures
       if (res.data && Array.isArray(res.data)) {
           setter(res.data);
       } else if (res.data && res.data.data && Array.isArray(res.data.data)) {
@@ -67,7 +70,7 @@ export const GlobalProvider = ({ children }) => {
     }
   }, []);
 
-  // Wrap specific loaders in useCallback
+  // Loaders
   const loadCustomers = useCallback(() => fetchData('/customers/', setCustomers), [fetchData]);
   
   const loadBrands = useCallback(() => fetchData('/inventory/brands', setBrands), [fetchData]);
@@ -77,9 +80,12 @@ export const GlobalProvider = ({ children }) => {
   const loadBilling = useCallback(() => fetchData('/billing/history', setBillingHistory), [fetchData]);
   const loadDebtors = useCallback(() => fetchData('/billing/debtors', setDebtors), [fetchData]);
   const loadReports = useCallback(() => fetchData('/billing/report', setReports), [fetchData]);
+  
+  const loadServices = useCallback(() => fetchData('/services/upcoming', setUpcomingServices), [fetchData]);
+  
+  // 🔥 NEW: Load Warranties
+  const loadWarranties = useCallback(() => fetchData('/warranty/list', setWarranties), [fetchData]);
 
-  // 🔥 UPDATED: Only load Master Data (Brands/Cats) here. 
-  // Products are loaded locally in the Inventory component.
   const loadInventoryData = useCallback(async () => {
     await Promise.all([loadBrands(), loadCategories(), loadSubCategories()]);
   }, [loadBrands, loadCategories, loadSubCategories]);
@@ -90,16 +96,17 @@ export const GlobalProvider = ({ children }) => {
   useEffect(() => {
     const initApp = async () => {
         try {
-            console.log("🚀 App Initializing...");
-            const timerPromise = new Promise(resolve => setTimeout(resolve, 1500));
+            const timerPromise = new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Load essential data for dropdowns and dashboard
+            // Load essential data
             const dataPromise = Promise.allSettled([
                 loadCustomers(),
-                loadInventoryData(), // Loads Brands, Cats, SubCats
+                loadInventoryData(),
                 loadBilling(),
                 loadDebtors(),
-                loadReports()
+                loadReports(),
+                loadServices(),
+                loadWarranties() // 🔥 Added here to load on startup
             ]);
 
             await Promise.all([timerPromise, dataPromise]);
@@ -110,7 +117,7 @@ export const GlobalProvider = ({ children }) => {
         }
     };
     initApp();
-  }, [loadCustomers, loadInventoryData, loadBilling, loadDebtors, loadReports]);
+  }, [loadCustomers, loadInventoryData, loadBilling, loadDebtors, loadReports, loadServices, loadWarranties]);
 
   // ==================================================
   // 6. CONTEXT VALUE (Memoized)
@@ -119,19 +126,26 @@ export const GlobalProvider = ({ children }) => {
       isLoading,
       darkMode, toggleTheme,
       isSidebarCollapsed, toggleSidebar, openSidebar, closeSidebar,
+      
       customers, loadCustomers,
+      
       brands, categories, subCategories,
       loadBrands, loadCategories, loadSubCategories, loadInventoryData,
+      
       billingHistory, loadBilling,
       debtors, loadDebtors,
-      reports, loadReports
+      reports, loadReports,
+      
+      upcomingServices, loadServices,
+      
+      warranties, loadWarranties // 🔥 Added to Context
   }), [
       isLoading, darkMode, isSidebarCollapsed,
-      customers, brands, categories, subCategories, // Removed 'products'
-      billingHistory, debtors, reports,
+      customers, brands, categories, subCategories,
+      billingHistory, debtors, reports, upcomingServices, warranties,
       toggleTheme, toggleSidebar, openSidebar, closeSidebar,
       loadCustomers, loadBrands, loadCategories, loadSubCategories, loadInventoryData,
-      loadBilling, loadDebtors, loadReports
+      loadBilling, loadDebtors, loadReports, loadServices, loadWarranties
   ]);
 
   return (

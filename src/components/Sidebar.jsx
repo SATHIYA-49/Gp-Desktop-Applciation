@@ -196,7 +196,6 @@ const Sidebar = () => {
         
         {/* 1. DASHBOARD */}
         <li style={styles.navItem}>
-          {/* 🔥 Added 'nav-item-spark' class here */}
           <NavLink to="/dashboard" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
               <>
@@ -259,12 +258,12 @@ const Sidebar = () => {
         <li style={{...styles.navItem, padding: 0}}>
           <div style={{padding: '0 16px'}}>
             <div 
-                className="nav-item-spark" // 🔥 Spark on Parent Item
+                className="nav-item-spark" 
                 style={styles.link(activeMenu === 'billing')} 
                 onClick={() => handleMenuClick('billing')}
             >
                 <i className="bi bi-receipt" style={styles.icon(activeMenu === 'billing')}></i>
-                <span style={{...styles.linkLabel, flex: 1}}>Billing / POS</span>
+                <span style={{...styles.linkLabel, flex: 1}}>Billing</span>
                 <i className="bi bi-chevron-right" style={styles.arrow(activeMenu === 'billing')}></i>
             </div>
           </div>
@@ -277,7 +276,19 @@ const Sidebar = () => {
           </div>
         </li>
 
-        {/* 7. ACCOUNTS */}
+        {/* 🛡️ 7. WARRANTIES (FIXED ALIGNMENT) */}
+        <li style={styles.navItem}>
+          <NavLink to="/warranties" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
+            {({ isActive }) => (
+              <>
+                <i className="bi bi-shield-check" style={styles.icon(isActive)}></i>
+                <span style={styles.linkLabel}>Warranty Management</span>
+              </>
+            )}
+          </NavLink>
+        </li>
+
+        {/* 8. ACCOUNTS */}
         <li style={styles.navItem}>
           <NavLink to="/accounts" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (
@@ -289,11 +300,11 @@ const Sidebar = () => {
           </NavLink>
         </li>
 
-        {/* 8. REPORTS (DROPDOWN) */}
+        {/* 9. REPORTS (DROPDOWN) */}
         <li style={{...styles.navItem, padding: 0}}>
           <div style={{padding: '0 16px'}}>
             <div 
-                className="nav-item-spark" // 🔥 Spark on Parent Item
+                className="nav-item-spark" 
                 style={styles.link(activeMenu === 'reports')} 
                 onClick={() => handleMenuClick('reports')}
             >
@@ -312,7 +323,7 @@ const Sidebar = () => {
           </div>
         </li>
 
-        {/* 9. SETTINGS */}
+        {/* 10. SETTINGS */}
         <li style={styles.navItem}>
           <NavLink to="/settings" className="nav-item-spark" style={({ isActive }) => styles.link(isActive)}>
             {({ isActive }) => (

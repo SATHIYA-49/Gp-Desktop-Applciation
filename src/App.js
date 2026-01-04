@@ -16,6 +16,7 @@ import Accounts from './pages/Accounts';
 import Settings from './pages/Settings';
 import ViewBills from './pages/ViewBills';
 import Inventory from './pages/Inventory';
+import WarrantyManager from './pages/WarrantyManager';
 import Services from './pages/Services';
 import Employees from './pages/Employees'; 
 
@@ -23,6 +24,7 @@ import Employees from './pages/Employees';
 import FinancialReports from './pages/FinancialReports';
 import InventoryReports from './pages/InventoryReports'; // <--- NEW IMPORT
 import ServiceReports from './pages/ServiceReports';
+
 
 const AppContent = () => {
   // GET LOADING STATE
@@ -54,6 +56,7 @@ const AppContent = () => {
             <Route path="/customers" element={<Customers />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/view-bills" element={<ViewBills />} />
+            <Route path="/warranties" element={<WarrantyManager />} />
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/services" element={<Services />} />
             <Route path="/inventory" element={<Inventory />} />

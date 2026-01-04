@@ -93,7 +93,7 @@ const ViewBills = () => {
       
       {/* 1. INVOICE DETAILS MODAL */}
       {selectedBill && (
-         (() => {
+          (() => {
             const cust = getCustomerData(selectedBill); // Get safe data
             return (
                 <>
@@ -148,8 +148,42 @@ const ViewBills = () => {
                                                 {selectedBill.items?.map((item, idx) => (
                                                     <tr key={idx}>
                                                         <td className="ps-3">
-                                                            <div className="fw-bold small">{item.product_name}</div>
-                                                            {item.warranty_image && <span className="badge bg-info text-dark" style={{fontSize: '0.6rem'}}>Warranty</span>}
+                                                            <div className="d-flex align-items-center">
+                                                                {/* Product Name */}
+                                                                <div className="fw-bold small">{item.product_name}</div>
+                                                                
+                                                                {/* Warranty Image Logic (Thumbnail) */}
+                                                                {item.warranty_image && (
+                                                                    <div className="ms-2">
+                                                                        <a 
+                                                                            href={item.warranty_image} 
+                                                                            target="_blank" 
+                                                                            rel="noopener noreferrer"
+                                                                            title="View Warranty Card"
+                                                                        >
+                                                                            <img 
+                                                                                src={item.warranty_image} 
+                                                                                alt="Warranty" 
+                                                                                className="rounded border shadow-sm"
+                                                                                style={{ 
+                                                                                    width: '35px', 
+                                                                                    height: '35px', 
+                                                                                    objectFit: 'cover',
+                                                                                    cursor: 'zoom-in'
+                                                                                }} 
+                                                                            />
+                                                                        </a>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            
+                                                            {/* Warranty Badge Text */}
+                                                            {item.warranty_image && (
+                                                                <div className="text-success" style={{fontSize: '0.65rem'}}>
+                                                                    <i className="bi bi-check-circle-fill me-1"></i>
+                                                                    Warranty Attached
+                                                                </div>
+                                                            )}
                                                         </td>
                                                         <td className="text-center">{item.quantity}</td>
                                                         <td className="text-end">{formatINR(item.unit_price)}</td>

@@ -11,7 +11,6 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
     const [search, setSearch] = useState('');
     const wrapperRef = useRef(null);
 
-    // Safe check for options
     const safeOptions = Array.isArray(options) ? options : [];
     const selectedItem = safeOptions.find(opt => opt.value === value);
 
@@ -45,10 +44,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
                         className={`form-control border-0 shadow-none ${theme.input}`} 
                         placeholder={selectedItem ? selectedItem.label : placeholder}
                         value={isOpen ? search : (selectedItem ? selectedItem.label : '')}
-                        onClick={(e) => {
-                            e.stopPropagation(); 
-                            setIsOpen(true);     
-                        }}
+                        onClick={(e) => { e.stopPropagation(); setIsOpen(true); }}
                         onChange={(e) => { setSearch(e.target.value); setIsOpen(true); }}
                         onFocus={() => setIsOpen(true)}
                         style={{backgroundColor: 'transparent'}}
@@ -78,11 +74,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
                                         borderColor: darkMode ? '#334155' : '#f1f5f9',
                                         backgroundColor: opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'
                                     }}
-                                    onMouseDown={() => {
-                                        onChange(opt.value); 
-                                        setIsOpen(false);
-                                        setSearch('');
-                                    }}
+                                    onMouseDown={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = darkMode ? '#334155' : '#f8f9fa'}
                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'}
                                 >
@@ -100,19 +92,15 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
     );
 };
 
-
 // ==========================================
 // 2. MAIN BILLING COMPONENT
 // ==========================================
 const Billing = () => {
-  // 🔥 UPDATED: Removed 'products' from global context destructuring
   const { customers, billingHistory, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
 
-  // --- LOCAL STATES ---
-  const [products, setProducts] = useState([]); // Fetch products locally
+  const [products, setProducts] = useState([]); 
   const [custId, setCustId] = useState('');
   
-  // Service States
   const [scheduleService, setScheduleService] = useState(false);
   const [serviceDate, setServiceDate] = useState('');
   const [serviceType, setServiceType] = useState('Installation');
@@ -124,39 +112,35 @@ const Billing = () => {
   const [discount, setDiscount] = useState('');
   const [applyDiscount, setApplyDiscount] = useState(false);
   
-  // Warranty States
-  const [hasWarranty, setHasWarranty] = useState(false); 
-  const [warrantyFile, setWarrantyFile] = useState(null); 
+  // WARRANTY STATES
+  const [enableWarranty, setEnableWarranty] = useState(false);
+  const [warrantyDuration, setWarrantyDuration] = useState('');
+  const [warrantyUnit, setWarrantyUnit] = useState('Months'); 
+  // REMOVED: warrantyImageFile state (unused)
+  const [uploadedImageUrl, setUploadedImageUrl] = useState(null); 
 
   const [cart, setCart] = useState([]);
   const [paid, setPaid] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
-  
-  // Messages
   const [errorMsg, setErrorMsg] = useState('');
   const [paidError, setPaidError] = useState(''); 
 
-  // --- 1. FETCH PRODUCTS LOCALLY (Since removed from GlobalState) ---
-  useEffect(() => {
-    const fetchProducts = async () => {
-        try {
-            // Fetching a larger limit for dropdown (or implement server-search later)
-            const res = await apiClient.get('/inventory/products?limit=500&status=active');
-            if (res.data && Array.isArray(res.data.data)) {
-                setProducts(res.data.data);
-            } else {
-                setProducts([]);
-            }
-        } catch (err) {
-            console.error("Billing: Error loading products", err);
+  const fetchProducts = async () => {
+    try {
+        const res = await apiClient.get('/inventory/products?limit=500&status=active');
+        if (res.data && Array.isArray(res.data.data)) {
+            setProducts(res.data.data);
+        } else {
             setProducts([]);
         }
-    };
-    fetchProducts();
-  }, []);
+    } catch (err) {
+        setProducts([]);
+    }
+  };
 
-  // --- THEME ENGINE ---
+  useEffect(() => { fetchProducts(); }, []);
+
   const theme = {
     container: darkMode ? 'bg-dark' : 'bg-light',
     text: darkMode ? 'text-white' : 'text-dark',
@@ -172,22 +156,10 @@ const Billing = () => {
     badge: darkMode ? 'bg-secondary text-white' : 'bg-light text-dark'
   };
 
-  // --- DATA MAPPING (SAFE CHECKS ADDED) ---
-  const customerOptions = (customers || []).map(c => ({
-      value: c.id,
-      label: c.name,
-      subLabel: c.phone
-  }));
-
-  const productOptions = (products || []).map(p => ({
-      value: p.id,
-      label: p.name,
-      subLabel: `Stock: ${p.stock_quantity} | ₹${p.sell_price}`
-  }));
-
-  // --- HELPERS ---
+  const customerOptions = (customers || []).map(c => ({ value: c.id, label: c.name, subLabel: c.phone }));
+  const productOptions = (products || []).map(p => ({ value: p.id, label: p.name, subLabel: `Stock: ${p.stock_quantity} | ₹${p.sell_price}` }));
   const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
-
+  
   const getTodayStr = () => {
     const d = new Date();
     const offset = d.getTimezoneOffset();
@@ -200,30 +172,20 @@ const Billing = () => {
      return billDate.startsWith(getTodayStr());
   });
 
-  // --- HANDLERS ---
-  
   const handleProductSelect = (selectedId) => {
     setProdId(selectedId);
     const p = products.find(i => i.id === selectedId);
     if (p) { 
-      setSelectedProduct(p); 
-      setPrice(p.sell_price); 
-      setDiscount(''); 
-      setQty(1); 
-      setHasWarranty(false); 
-      setWarrantyFile(null); 
-      setErrorMsg(''); 
+      setSelectedProduct(p); setPrice(p.sell_price); setDiscount(''); setQty(1); setErrorMsg(''); 
+      setWarrantyDuration(''); setWarrantyUnit('Months'); 
+      setUploadedImageUrl(null);
     } else { 
-      setSelectedProduct(null); 
-      setPrice(0); 
+      setSelectedProduct(null); setPrice(0); 
     }
   };
 
   const handleQtyChange = (val) => {
-    if (val === '' || isNaN(val)) {
-        setQty('');
-        return;
-    }
+    if (val === '' || isNaN(val)) { setQty(''); return; }
     const num = parseInt(val);
     if (num > 0) setQty(num);
   };
@@ -233,18 +195,30 @@ const Billing = () => {
 
   const handleDiscountChange = (e) => {
     const val = e.target.value;
-    if (val === '' || val < 0) {
-        setDiscount('');
-    } else {
-        setDiscount(parseFloat(val));
-    }
+    setDiscount(val === '' || val < 0 ? '' : parseFloat(val));
   };
 
-  // --- HELPER: Count existing items in cart to prevent over-stocking ---
-  const getExistingCartQuantity = (productId) => {
-    return cart.reduce((total, item) => {
-        return item.product_id === productId ? total + item.quantity : total;
-    }, 0);
+  const getRealtimeStock = (prod) => {
+    if(!prod) return 0;
+    const inCartQty = cart.reduce((total, item) => item.product_id === prod.id ? total + item.quantity : total, 0);
+    return Math.max(0, prod.stock_quantity - inCartQty);
+  };
+
+  const handleImageSelect = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+          Swal.showLoading();
+          // Updated to new route
+          const res = await apiClient.post("/warranty/upload", formData, { headers: { "Content-Type": "multipart/form-data" } });
+          setUploadedImageUrl(res.data.url);
+          Swal.close();
+      } catch (err) {
+          Swal.fire('Error', 'Failed to upload image.', 'error');
+      }
   };
 
   const addToCart = (e) => {
@@ -252,27 +226,17 @@ const Billing = () => {
     if (!selectedProduct) return;
     
     const requestedQty = parseInt(qty) || 1;
-    const currentStock = selectedProduct.stock_quantity || 0; 
-    
-    // 1. CALCULATE TOTAL (Cart + Input)
-    const alreadyInCart = getExistingCartQuantity(selectedProduct.id);
-    const totalRequest = alreadyInCart + requestedQty;
+    const availableStock = getRealtimeStock(selectedProduct);
 
-    // 2. CHECK STOCK
-    if (totalRequest > currentStock) {
-        return setErrorMsg(`Insufficient Stock! Available: ${currentStock}. In Cart: ${alreadyInCart}. You tried: ${requestedQty}`);
-    }
-
-    if (hasWarranty && !warrantyFile) {
-      return setErrorMsg("Please upload the Warranty Card image.");
+    if (requestedQty > availableStock) {
+        return setErrorMsg(`Insufficient Stock! Only ${availableStock} remaining.`);
     }
 
     const finalDiscount = applyDiscount ? (parseFloat(discount) || 0) : 0;
     const finalUnitPrice = price - finalDiscount;
     
     if (finalUnitPrice < selectedProduct.net_price) return setErrorMsg(`Price below Net Price (${formatINR(selectedProduct.net_price)})`);
-    if (finalUnitPrice > selectedProduct.sell_price) return setErrorMsg(`Price above MRP (${formatINR(selectedProduct.sell_price)})`);
-
+    
     const newItem = {
       product_id: prodId,
       product_name: selectedProduct.name,
@@ -282,34 +246,34 @@ const Billing = () => {
       discount: finalDiscount,
       final_price: finalUnitPrice,
       total: finalUnitPrice * requestedQty,
-      warranty_image: hasWarranty ? warrantyFile : null 
+      warranty_image: (enableWarranty && uploadedImageUrl) ? uploadedImageUrl : null,
+      warranty_duration: (enableWarranty && warrantyDuration) ? parseInt(warrantyDuration) : 0,
+      warranty_unit: (enableWarranty && warrantyDuration) ? warrantyUnit : null
     };
 
-    // 3. MERGE OR ADD TO CART
     setCart(prevCart => {
         const existingIdx = prevCart.findIndex(item => 
             item.product_id === newItem.product_id && 
-            item.final_price === newItem.final_price
+            item.final_price === newItem.final_price &&
+            item.warranty_image === newItem.warranty_image && 
+            item.warranty_duration === newItem.warranty_duration &&
+            item.warranty_unit === newItem.warranty_unit
         );
 
         if (existingIdx > -1) {
             const newCart = [...prevCart];
             const existingItem = newCart[existingIdx];
-            newCart[existingIdx] = {
-                ...existingItem,
-                quantity: existingItem.quantity + newItem.quantity,
-                total: existingItem.total + newItem.total
-            };
+            newCart[existingIdx] = { ...existingItem, quantity: existingItem.quantity + newItem.quantity, total: existingItem.total + newItem.total };
             return newCart;
         } else {
             return [...prevCart, newItem];
         }
     });
 
-    // Reset Inputs
     setProdId(''); setQty(1); setPrice(0); setDiscount(''); 
+    setWarrantyDuration(''); setEnableWarranty(false); setApplyDiscount(false);
+    setUploadedImageUrl(null); 
     setSelectedProduct(null); setErrorMsg('');
-    setHasWarranty(false); setWarrantyFile(null); 
   };
 
   const removeFromCart = (index) => setCart(cart.filter((_, i) => i !== index));
@@ -318,18 +282,10 @@ const Billing = () => {
   
   const handlePaidChange = (e) => {
       const val = e.target.value;
-      if(val === '') {
-        setPaid('');
-        setPaidError('');
-        return;
-      }
+      if(val === '') { setPaid(''); setPaidError(''); return; }
       const numVal = parseFloat(val);
       setPaid(numVal);
-      if (numVal > grandTotal) {
-          setPaidError(`Paid amount cannot exceed Total (${formatINR(grandTotal)})`);
-      } else {
-          setPaidError('');
-      }
+      setPaidError(numVal > grandTotal ? `Paid amount cannot exceed Total` : '');
   };
 
   const balance = Math.max(0, grandTotal - (parseFloat(paid) || 0));
@@ -339,43 +295,19 @@ const Billing = () => {
     if (!custId) return Swal.fire('Error', "Select a customer.", 'warning');
     if ((parseFloat(paid) || 0) > grandTotal) return Swal.fire('Error', "Paid amount is greater than total!", 'error'); 
     
-    if (scheduleService && !serviceDate) return Swal.fire('Error', "Please select a Service Date.", 'warning');
-
     setIsSubmitting(true);
     try {
       const billData = {
-        customer_id: custId, 
-        items: cart.map(item => ({...item, warranty_image: null})), 
-        paid_amount: parseFloat(paid) || 0, 
-        next_service_date: scheduleService ? serviceDate : null,
-        service_type: scheduleService ? serviceType : null 
+        customer_id: custId, items: cart, paid_amount: parseFloat(paid) || 0, 
+        next_service_date: scheduleService ? serviceDate : null, service_type: scheduleService ? serviceType : null 
       };
 
       await apiClient.post('/billing/create', billData);
-      
-      loadBilling(); loadDebtors(); loadReports();
-      setCart([]); setPaid(''); setCustId(''); 
-      setScheduleService(false); setServiceDate(''); setServiceType('Installation');
-      setPaidError('');
-      
-      Swal.fire({
-          icon: 'success',
-          title: 'Invoice Created!',
-          text: 'Bill saved successfully.',
-          background: darkMode ? '#1e293b' : '#fff',
-          color: darkMode ? '#fff' : '#545454',
-          timer: 2000,
-          showConfirmButton: false
-      });
-
+      loadBilling(); loadDebtors(); loadReports(); fetchProducts(); 
+      setCart([]); setPaid(''); setCustId(''); setScheduleService(false);
+      Swal.fire({ icon: 'success', title: 'Invoice Created!', timer: 2000, showConfirmButton: false });
     } catch (err) { 
-      Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: err.response?.data?.detail || "Failed",
-          background: darkMode ? '#1e293b' : '#fff',
-          color: darkMode ? '#fff' : '#545454',
-      });
+      Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.detail || "Failed" });
     } finally { 
       setIsSubmitting(false); 
     }
@@ -398,8 +330,10 @@ const Billing = () => {
             loadBilling(); 
             Swal.fire({
                 title: 'Updated',
-                text: 'Status changed.',
+                text: 'Status changed successfully.',
                 icon: 'success',
+                timer: 1500,
+                showConfirmButton: false,
                 background: darkMode ? '#1e293b' : '#fff',
                 color: darkMode ? '#fff' : '#545454',
             });
@@ -409,11 +343,7 @@ const Billing = () => {
     }
   };
 
-  const setReminder = (days) => {
-    const date = new Date();
-    date.setDate(date.getDate() + days);
-    setServiceDate(date.toISOString().split('T')[0]);
-  };
+  // REMOVED: unused setReminder function
 
   return (
     <div className={`container-fluid p-4 custom-scrollbar`} style={{ height: '100vh', overflowY: 'auto', overflowX: 'hidden', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa' }}>
@@ -434,21 +364,10 @@ const Billing = () => {
             </div>
             <div className="card-body p-4">
               
-              {/* 1. SEARCHABLE CUSTOMER SELECTION */}
               <div className="row g-3 mb-4">
                 <div className="col-md-6">
-                  <SearchableSelect 
-                    label="Select Customer"
-                    placeholder="Search name or phone..."
-                    options={customerOptions}
-                    value={custId}
-                    onChange={setCustId}
-                    theme={theme}
-                    darkMode={darkMode}
-                  />
+                  <SearchableSelect label="Select Customer" placeholder="Search name or phone..." options={customerOptions} value={custId} onChange={setCustId} theme={theme} darkMode={darkMode} />
                 </div>
-                
-                {/* SERVICE SCHEDULER TOGGLE */}
                 <div className="col-md-6 d-flex align-items-center pt-2">
                     <div className="form-check form-switch ps-0 mt-3">
                         <label className={`form-check-label fw-bold ms-5 ${theme.text}`} htmlFor="serviceToggle">Schedule Service?</label>
@@ -457,16 +376,12 @@ const Billing = () => {
                 </div>
               </div>
 
-              {/* 2. OPTIONAL SERVICE DETAILS */}
               {scheduleService && (
                     <div className={`p-3 rounded border border-dashed mb-4 animate__animated animate__fadeIn ${darkMode ? 'border-secondary' : 'bg-light'}`}>
                       <div className="row g-3">
                           <div className="col-md-6">
                               <label className={`small fw-bold ${theme.subText}`}>Service Date</label>
-                              <div className="input-group">
-                                  <input type="date" className={`form-control ${theme.input}`} value={serviceDate} onChange={e => setServiceDate(e.target.value)} />
-                                  <button className={`btn small ${darkMode ? 'btn-outline-light' : 'btn-outline-secondary'}`} type="button" onClick={() => setReminder(90)}>+3M</button>
-                              </div>
+                              <input type="date" className={`form-control ${theme.input}`} value={serviceDate} onChange={e => setServiceDate(e.target.value)} />
                           </div>
                           <div className="col-md-6">
                               <label className={`small fw-bold ${theme.subText}`}>Task Type</label>
@@ -482,33 +397,33 @@ const Billing = () => {
 
               <hr className={`opacity-25 my-4 ${darkMode ? 'text-white' : 'text-muted'}`}/>
 
-              {/* 3. ADD PRODUCTS FORM */}
               <form onSubmit={addToCart} className="mb-4">
                 <div className="d-flex justify-content-between align-items-center mb-2">
                     <h6 className={`fw-bold m-0 ${theme.text}`}>Add Items</h6>
-                    <div className="form-check form-switch">
-                        <input className="form-check-input" type="checkbox" id="discSwitch" checked={applyDiscount} onChange={() => setApplyDiscount(!applyDiscount)} />
-                        <label className={`form-check-label small ${theme.subText}`} htmlFor="discSwitch">Enable Discount</label>
+                    <div className="d-flex gap-3">
+                        <div className="form-check form-switch">
+                            <input className="form-check-input" type="checkbox" id="discSwitch" checked={applyDiscount} onChange={() => setApplyDiscount(!applyDiscount)} />
+                            <label className={`form-check-label small ${theme.subText}`} htmlFor="discSwitch">Discount</label>
+                        </div>
+                        <div className="form-check form-switch">
+                            <input className="form-check-input" type="checkbox" id="warrantySwitch" checked={enableWarranty} onChange={() => setEnableWarranty(!enableWarranty)} />
+                            <label className={`form-check-label small ${theme.subText}`} htmlFor="warrantySwitch">Warranty</label>
+                        </div>
                     </div>
                 </div>
 
                 <div className="row g-3 align-items-end">
                   
-                  {/* SEARCHABLE PRODUCT SELECT */}
-                  <div className="col-md-4">
-                    <SearchableSelect 
-                        label="Product"
-                        placeholder="Search product..."
-                        options={productOptions}
-                        value={prodId}
-                        onChange={handleProductSelect}
-                        theme={theme}
-                        darkMode={darkMode}
-                    />
-                    {selectedProduct && <div className={`small mt-1 ${theme.subText}`}>Stock: {selectedProduct.stock_quantity} | Net: ₹{selectedProduct.net_price}</div>}
+                  <div className={applyDiscount || enableWarranty ? "col-md-3" : "col-md-4"}>
+                    <SearchableSelect label="Product" placeholder="Search product..." options={productOptions} value={prodId} onChange={handleProductSelect} theme={theme} darkMode={darkMode} />
+                    {selectedProduct && (
+                        <div className={`small mt-1 fw-bold ${getRealtimeStock(selectedProduct) === 0 ? 'text-danger' : 'text-success'}`}>
+                            Stock: {getRealtimeStock(selectedProduct)} 
+                            <span className="text-muted fw-normal ms-2">| Net: ₹{selectedProduct.net_price}</span>
+                        </div>
+                    )}
                   </div>
                   
-                  {/* Price (Read Only) */}
                   <div className="col-md-2">
                     <label className={`small fw-bold mb-1 ${theme.subText}`}>MRP</label>
                     <div className="input-group">
@@ -517,18 +432,6 @@ const Billing = () => {
                     </div>
                   </div>
 
-                  {/* Discount */}
-                  {applyDiscount && (
-                    <div className="col-md-2 animate__animated animate__fadeIn">
-                      <label className={`small fw-bold mb-1 ${theme.subText}`}>Discount</label>
-                      <div className="input-group">
-                          <span className={`input-group-text ${theme.inputGroupText}`}>₹</span>
-                          <input type="number" className={`form-control ${theme.input}`} value={discount} onChange={handleDiscountChange} placeholder="0" />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Quantity Stepper */}
                   <div className="col-md-2">
                     <label className={`small fw-bold mb-1 ${theme.subText}`}>Qty</label>
                     <div className="input-group">
@@ -538,48 +441,75 @@ const Billing = () => {
                     </div>
                   </div>
 
-                  {/* Add Button */}
-                  <div className="col-md-2">
-                    <button className="btn btn-primary w-100 fw-bold" disabled={!selectedProduct}>
-                        <i className="bi bi-plus-lg"></i> Add
+                  {applyDiscount && (
+                    <div className="col-md-2 animate__animated animate__fadeIn">
+                      <label className={`small fw-bold mb-1 ${theme.subText}`}>Discount</label>
+                      <input type="number" className={`form-control ${theme.input}`} value={discount} onChange={handleDiscountChange} placeholder="0" />
+                    </div>
+                  )}
+
+                  {enableWarranty && (
+                    <div className="col-md-3 animate__animated animate__fadeIn">
+                        <label className={`small fw-bold mb-1 ${theme.subText}`}>Warranty Info</label>
+                        <div className="input-group mb-1">
+                            <input type="number" className={`form-control form-control-sm ${theme.input}`} placeholder="Dur" value={warrantyDuration} onChange={e => setWarrantyDuration(e.target.value)} />
+                            <select className={`form-select form-select-sm ${theme.input}`} value={warrantyUnit} onChange={e => setWarrantyUnit(e.target.value)} style={{maxWidth: '70px'}}>
+                                <option value="Days">D</option>
+                                <option value="Months">M</option>
+                                <option value="Years">Y</option>
+                            </select>
+                        </div>
+                        <div className="input-group input-group-sm">
+                            <input type="file" className={`form-control ${theme.input}`} accept="image/*,application/pdf" onChange={handleImageSelect} />
+                        </div>
+                        {uploadedImageUrl && <div className="small text-success mt-1"><i className="bi bi-check-circle"></i> Proof Attached</div>}
+                    </div>
+                  )}
+
+                  <div className="col-md-1 d-flex align-items-end flex-fill">
+                    <button className="btn btn-primary w-100 fw-bold" disabled={!selectedProduct || getRealtimeStock(selectedProduct) <= 0}>
+                        <i className="bi bi-plus-lg"></i>
                     </button>
                   </div>
                 </div>
-
-                {/* Warranty Upload */}
-                {selectedProduct && (
-                    <div className={`mt-3 p-2 border rounded d-flex align-items-center gap-3 ${darkMode ? 'border-secondary' : 'bg-light'}`}>
-                        <div className="form-check mb-0">
-                            <input className="form-check-input" type="checkbox" id="warrCheck" checked={hasWarranty} onChange={e => setHasWarranty(e.target.checked)} />
-                            <label className={`form-check-label small fw-bold ${theme.text}`} htmlFor="warrCheck">Has Warranty?</label>
-                        </div>
-                        {hasWarranty && (
-                            <input type="file" className={`form-control form-control-sm w-auto ${theme.input}`} accept="image/*" onChange={e => setWarrantyFile(e.target.files[0])} />
-                        )}
-                    </div>
-                )}
                 
-                {errorMsg && <div className="alert alert-danger py-1 px-2 mt-2 small"><i className="bi bi-exclamation-circle me-1"></i>{errorMsg}</div>}
+                {errorMsg && <div className="alert alert-danger py-1 px-2 mt-2 small">{errorMsg}</div>}
               </form>
 
               {/* 4. CART TABLE */}
               <div className={`table-responsive border rounded-3 mb-4 ${darkMode ? 'border-secondary' : ''}`}>
                 <table className={`table table-hover mb-0 align-middle text-center ${darkMode ? 'table-dark' : ''}`}>
                   <thead className={`${theme.tableHead} small text-uppercase`}>
-                    <tr><th className="text-start ps-4">Item</th><th>Price</th><th>Disc</th><th>Qty</th><th className="text-end pe-4">Total</th><th></th></tr>
+                    <tr>
+                        <th className="text-start ps-4">Item</th>
+                        <th className="text-start">Warranty</th> 
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th className="text-end pe-4">Total</th>
+                        <th></th>
+                    </tr>
                   </thead>
                   <tbody>
                     {cart.length === 0 ? (
-                      <tr><td colSpan="6" className={`py-5 ${theme.subText}`}>No items added to bill yet.</td></tr>
+                      <tr><td colSpan="6" className={`py-5 ${theme.subText}`}>No items added.</td></tr>
                     ) : (
                       cart.map((item, idx) => (
                         <tr key={idx} className={darkMode ? 'border-secondary' : ''}>
                           <td className={`text-start ps-4 fw-bold ${theme.text}`}>
                               {item.product_name}
-                              {item.warranty_image && <span className="badge bg-info ms-2" style={{fontSize: '0.6rem'}}>WARRANTY</span>}
+                              <div className="small opacity-75 fw-normal">
+                                {item.warranty_duration > 0 && <span className="text-success font-monospace">Warranty: {item.warranty_duration} {item.warranty_unit}</span>}
+                              </div>
+                          </td>
+                          <td className="text-start" style={{minWidth: '160px'}}>
+                              {item.warranty_image ? (
+                                  <div className="d-flex align-items-center gap-2">
+                                      <span className="badge bg-success small">Attached</span>
+                                      <a href={item.warranty_image} target="_blank" rel="noreferrer" className="small text-decoration-none">View</a>
+                                  </div>
+                              ) : <span className="text-muted small">-</span>}
                           </td>
                           <td className={theme.text}>₹{item.unit_price}</td>
-                          <td className="text-danger">{item.discount > 0 ? `-₹${item.discount}` : '-'}</td>
                           <td className={theme.text}>{item.quantity}</td>
                           <td className={`text-end pe-4 fw-bold ${theme.text}`}>₹{item.total.toLocaleString('en-IN')}</td>
                           <td><button className="btn btn-sm text-danger" onClick={() => removeFromCart(idx)}><i className="bi bi-trash"></i></button></td>
@@ -595,29 +525,18 @@ const Billing = () => {
                 <div className="col-md-5">
                     <div className={`p-3 rounded border ${theme.paymentBox}`}>
                         <div className={`d-flex justify-content-between mb-2 ${theme.text}`}>
-                            <span>Subtotal:</span>
-                            <span className="fw-bold">₹{grandTotal.toLocaleString('en-IN')}</span>
+                            <span>Subtotal:</span><span className="fw-bold">₹{grandTotal.toLocaleString('en-IN')}</span>
                         </div>
                         <div className="input-group mb-2">
                             <span className={`input-group-text fw-bold ${theme.inputGroupText}`}>Paid ₹</span>
-                            <input 
-                                type="number" 
-                                className={`form-control fw-bold ${theme.input} ${paidError ? 'is-invalid' : ''}`} 
-                                value={paid} 
-                                onChange={handlePaidChange} 
-                                placeholder="0"
-                            />
+                            <input type="number" className={`form-control fw-bold ${theme.input} ${paidError ? 'is-invalid' : ''}`} value={paid} onChange={handlePaidChange} placeholder="0"/>
                         </div>
                         {paidError && <small className="text-danger d-block mb-2">{paidError}</small>}
-                        
                         <div className="d-flex justify-content-between border-top pt-2">
-                            <span className="fs-5 fw-bold text-danger">Balance Due:</span>
-                            <span className="fs-5 fw-bold text-danger">₹{balance.toLocaleString('en-IN')}</span>
+                            <span className="fs-5 fw-bold text-danger">Balance Due:</span><span className="fs-5 fw-bold text-danger">₹{balance.toLocaleString('en-IN')}</span>
                         </div>
-                        
                         <button className="btn btn-success w-100 mt-3 py-2 fw-bold shadow-sm" onClick={handleSubmit} disabled={isSubmitting || cart.length === 0}>
-                            {isSubmitting ? <span className="spinner-border spinner-border-sm me-2"></span> : <i className="bi bi-check-lg me-2"></i>}
-                            GENERATE BILL
+                            {isSubmitting ? <span className="spinner-border spinner-border-sm me-2"></span> : <i className="bi bi-check-lg me-2"></i>} GENERATE BILL
                         </button>
                     </div>
                 </div>
@@ -636,20 +555,15 @@ const Billing = () => {
             </div>
             <div className="card-body p-0">
                 <div className="list-group list-group-flush">
-                    {todaysBills.length === 0 ? (
-                        <div className={`text-center py-5 ${theme.subText}`}>No bills generated today.</div>
-                    ) : (
+                    {todaysBills.length === 0 ? <div className={`text-center py-5 ${theme.subText}`}>No bills generated today.</div> : 
                         todaysBills.map(b => (
                             <div key={b.id} className={`list-group-item d-flex justify-content-between align-items-center py-3 ${theme.listGroupItem}`}>
-                                <div>
-                                    <div className={`fw-bold ${theme.text}`}>{b.users?.name || 'Unknown'}</div>
-                                    <small className={theme.subText}>Inv: #{b.invoice_no}</small>
-                                </div>
+                                <div><div className={`fw-bold ${theme.text}`}>{b.users?.name || 'Unknown'}</div><small className={theme.subText}>Inv: #{b.invoice_no}</small></div>
                                 <div className="text-end">
                                     <div className={`fw-bold ${theme.text}`}>₹{b.total_amount.toLocaleString('en-IN')}</div>
                                     <span 
-                                        onClick={() => toggleStatus(b.id)}
-                                        className={`badge ${b.invoice_status === 'Cancelled' ? 'bg-danger' : 'bg-success'} pointer`}
+                                        onClick={() => toggleStatus(b.id)} 
+                                        className={`badge ${b.invoice_status === 'Cancelled' ? 'bg-danger' : 'bg-success'}`}
                                         style={{cursor: 'pointer'}}
                                     >
                                         {b.invoice_status}
@@ -657,20 +571,13 @@ const Billing = () => {
                                 </div>
                             </div>
                         ))
-                    )}
+                    }
                 </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* STYLES */}
-      <style>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: ${darkMode ? '#475569' : '#cbd5e1'}; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: ${darkMode ? '#64748b' : '#94a3b8'}; }
-      `}</style>
+      <style>{`.custom-scrollbar::-webkit-scrollbar { width: 6px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: ${darkMode ? '#475569' : '#cbd5e1'}; border-radius: 10px; }`}</style>
     </div>
   );
 };
