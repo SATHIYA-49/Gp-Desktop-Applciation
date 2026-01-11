@@ -19,25 +19,24 @@ export const GlobalProvider = ({ children }) => {
   // --- 2. DATA STATES ---
   const [customers, setCustomers] = useState([]);
   
-  // Inventory Master Data
+  // Inventory
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
   const [subCategories, setSubCategories] = useState([]);
   
-  // Billing & Reports
+  // Billing
   const [billingHistory, setBillingHistory] = useState([]);
   const [debtors, setDebtors] = useState([]);
   const [reports, setReports] = useState([]);
 
   // Services & Warranties
-  const [upcomingServices, setUpcomingServices] = useState([]);
-  // 🔥 NEW: Warranty State
+  const [upcomingServices, setUpcomingServices] = useState([]); 
+  const [services, setServices] = useState([]); 
   const [warranties, setWarranties] = useState([]); 
 
   // ==================================================
-  // 3. ACTIONS (Memoized)
+  // 3. UI ACTIONS
   // ==================================================
-
   const toggleTheme = useCallback(() => {
     setDarkMode(prev => {
       const newMode = !prev;
@@ -53,7 +52,6 @@ export const GlobalProvider = ({ children }) => {
   // ==================================================
   // 4. DATA FETCHING (Memoized)
   // ==================================================
-
   const fetchData = useCallback(async (endpoint, setter) => {
     try {
       const res = await apiClient.get(endpoint);
@@ -72,41 +70,88 @@ export const GlobalProvider = ({ children }) => {
 
   // Loaders
   const loadCustomers = useCallback(() => fetchData('/customers/', setCustomers), [fetchData]);
-  
   const loadBrands = useCallback(() => fetchData('/inventory/brands', setBrands), [fetchData]);
   const loadCategories = useCallback(() => fetchData('/inventory/categories', setCategories), [fetchData]);
   const loadSubCategories = useCallback(() => fetchData('/inventory/sub-categories', setSubCategories), [fetchData]);
   
+  // Billing Routes
   const loadBilling = useCallback(() => fetchData('/billing/history', setBillingHistory), [fetchData]);
-  const loadDebtors = useCallback(() => fetchData('/billing/debtors', setDebtors), [fetchData]);
-  const loadReports = useCallback(() => fetchData('/billing/report', setReports), [fetchData]);
   
-  const loadServices = useCallback(() => fetchData('/services/upcoming', setUpcomingServices), [fetchData]);
+  // 🔥 UPDATED: Moved to /accounts/debtors (Fixes 404)
+  const loadDebtors = useCallback(() => fetchData('/accounts/debtors', setDebtors), [fetchData]);
   
-  // 🔥 NEW: Load Warranties
+  // 🔥 UPDATED: Moved to /accounts/report (Fixes 404)
+  const loadReports = useCallback(() => fetchData('/accounts/report', setReports), [fetchData]);
+  
+  const loadUpcomingServices = useCallback(() => fetchData('/services/upcoming', setUpcomingServices), [fetchData]);
   const loadWarranties = useCallback(() => fetchData('/warranty/list', setWarranties), [fetchData]);
+
+  // Load Full Service List
+  const loadServices = useCallback(() => fetchData('/services/', setServices), [fetchData]);
 
   const loadInventoryData = useCallback(async () => {
     await Promise.all([loadBrands(), loadCategories(), loadSubCategories()]);
   }, [loadBrands, loadCategories, loadSubCategories]);
 
   // ==================================================
-  // 5. INITIALIZATION
+  // 5. SERVICE OPTIMIZED ACTIONS (HOOKS)
+  // ==================================================
+  
+  // A. Add Service
+  const addService = useCallback(async (formData) => {
+    try {
+      const res = await apiClient.post('/services/assign', formData);
+      const newService = res.data; 
+      
+      setServices(prev => [newService, ...prev]);
+      setUpcomingServices(prev => [newService, ...prev]); 
+      return { success: true };
+    } catch (error) {
+      console.error("Add Service Failed", error);
+      throw error;
+    }
+  }, []);
+
+  // B. Update Service
+  const updateService = useCallback(async (id, updates) => {
+    try {
+      setServices(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+      await apiClient.put(`/services/${id}`, updates);
+      return { success: true };
+    } catch (error) {
+      loadServices(); 
+      throw error;
+    }
+  }, [loadServices]);
+
+  // C. Delete Service
+  const deleteService = useCallback(async (id) => {
+    try {
+      setServices(prev => prev.filter(s => s.id !== id));
+      await apiClient.delete(`/services/${id}`);
+    } catch (error) {
+      loadServices();
+      throw error;
+    }
+  }, [loadServices]);
+
+  // ==================================================
+  // 6. INITIALIZATION
   // ==================================================
   useEffect(() => {
     const initApp = async () => {
         try {
             const timerPromise = new Promise(resolve => setTimeout(resolve, 1000));
             
-            // Load essential data
             const dataPromise = Promise.allSettled([
                 loadCustomers(),
                 loadInventoryData(),
                 loadBilling(),
                 loadDebtors(),
                 loadReports(),
-                loadServices(),
-                loadWarranties() // 🔥 Added here to load on startup
+                loadUpcomingServices(),
+                loadServices(), 
+                loadWarranties()
             ]);
 
             await Promise.all([timerPromise, dataPromise]);
@@ -117,10 +162,10 @@ export const GlobalProvider = ({ children }) => {
         }
     };
     initApp();
-  }, [loadCustomers, loadInventoryData, loadBilling, loadDebtors, loadReports, loadServices, loadWarranties]);
+  }, [loadCustomers, loadInventoryData, loadBilling, loadDebtors, loadReports, loadUpcomingServices, loadServices, loadWarranties]);
 
   // ==================================================
-  // 6. CONTEXT VALUE (Memoized)
+  // 7. CONTEXT VALUE
   // ==================================================
   const contextValue = useMemo(() => ({
       isLoading,
@@ -136,16 +181,27 @@ export const GlobalProvider = ({ children }) => {
       debtors, loadDebtors,
       reports, loadReports,
       
-      upcomingServices, loadServices,
+      upcomingServices, 
+      services, 
+      loadServices, 
       
-      warranties, loadWarranties // 🔥 Added to Context
+      addService, 
+      updateService, 
+      deleteService,
+      
+      warranties, loadWarranties
   }), [
       isLoading, darkMode, isSidebarCollapsed,
       customers, brands, categories, subCategories,
-      billingHistory, debtors, reports, upcomingServices, warranties,
+      billingHistory, debtors, reports, 
+      upcomingServices, services, warranties,
+      
       toggleTheme, toggleSidebar, openSidebar, closeSidebar,
       loadCustomers, loadBrands, loadCategories, loadSubCategories, loadInventoryData,
-      loadBilling, loadDebtors, loadReports, loadServices, loadWarranties
+      loadBilling, loadDebtors, loadReports, 
+      loadServices, loadWarranties,
+      
+      addService, updateService, deleteService 
   ]);
 
   return (

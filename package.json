@@ -1,10 +1,10 @@
 {
   "name": "golden-power",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "main": "main.js",
   "homepage": "./",
-  "description": "Golden Power",
-  "author": "Golden Power",
+  "description": "Golden Power development process",
+  "author": "Spatakal Tech",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/SATHIYA-49/Gp-Desktop-Applciation.git"

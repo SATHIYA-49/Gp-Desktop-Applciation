@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { GlobalContext } from '../context/GlobalState';
 import apiClient from '../api/client';
 import Swal from 'sweetalert2';
+// ✅ RESTORED: Import the component
 import TechnicianServiceDetails from '../components/TechnicianServiceDetails';
 
 // ==========================================
@@ -132,7 +133,7 @@ const Employees = () => {
   const [allServices, setAllServices] = useState([]); 
   const [searchTerm, setSearchTerm] = useState('');
   
-  // 🔥 NEW: Filter State ('active' or 'inactive')
+  // Filter State ('active' or 'inactive')
   const [statusFilter, setStatusFilter] = useState('active'); 
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -140,6 +141,8 @@ const Employees = () => {
 
   const [showModal, setShowModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
+  
+  // ✅ RESTORED: Details Modal State
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedTechName, setSelectedTechName] = useState('');
   const [selectedTechTasks, setSelectedTechTasks] = useState([]);
@@ -188,6 +191,7 @@ const Employees = () => {
     }
   };
 
+  // ✅ RESTORED: Row Click Handler to Open Modal
   const handleRowClick = (employee) => {
       const techTasks = allServices.filter(t => t.assigned_employee_id === employee.id);
       setSelectedTechName(employee.name);
@@ -206,16 +210,12 @@ const Employees = () => {
   // ==========================================
   const filteredEmployees = employees
       .filter(e => {
-          // 1. Check Search Term
           const term = searchTerm.toLowerCase() || '';
           const name = (e.name || '').toLowerCase();
           const phone = (e.phone || '').toString();
           const matchesSearch = name.includes(term) || phone.includes(term);
-          
-          // 2. Check Status Category
-          const isActive = e.is_active !== false; // Default true
+          const isActive = e.is_active !== false; 
           const matchesStatus = statusFilter === 'active' ? isActive : !isActive;
-
           return matchesSearch && matchesStatus;
       })
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
@@ -229,7 +229,16 @@ const Employees = () => {
     <div className="container-fluid p-4" style={{ minHeight: '100vh', background: theme.container }}>
       
       {showModal && <EmployeeFormModal employee={editingEmployee} onClose={() => setShowModal(false)} onSuccess={loadData} theme={theme} darkMode={darkMode} />}
-      <TechnicianServiceDetails show={showDetailsModal} onClose={() => setShowDetailsModal(false)} technicianName={selectedTechName} tasks={selectedTechTasks} theme={theme} darkMode={darkMode} />
+      
+      {/* ✅ RESTORED: Technician Details Modal */}
+      <TechnicianServiceDetails 
+        show={showDetailsModal} 
+        onClose={() => setShowDetailsModal(false)} 
+        technicianName={selectedTechName} 
+        tasks={selectedTechTasks} 
+        theme={theme} 
+        darkMode={darkMode} 
+      />
 
       {/* HEADER */}
       <div className="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
@@ -246,7 +255,7 @@ const Employees = () => {
         </div>
       </div>
       
-      {/* 🔥 TABS FOR CATEGORIZATION */}
+      {/* TABS */}
       <ul className="nav nav-pills mb-3">
           <li className="nav-item">
               <button 
@@ -292,6 +301,7 @@ const Employees = () => {
                     const isActive = e.is_active !== false; 
                     
                     return (
+                        // ✅ RESTORED: onClick handler to open details
                         <tr key={e.id} className={theme.text} style={{cursor: 'pointer', opacity: isActive ? 1 : 0.7}} onClick={() => handleRowClick(e)} title="Click to view history">
                             <td className="ps-4 fw-bold">
                                 <div className="d-flex align-items-center">

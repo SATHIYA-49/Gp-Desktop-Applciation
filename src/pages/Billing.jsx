@@ -16,7 +16,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
 
     const filteredOptions = safeOptions.filter(opt => 
         opt.label.toLowerCase().includes(search.toLowerCase()) || 
-        opt.subLabel?.toLowerCase().includes(search.toLowerCase())
+        (opt.subLabel && opt.subLabel.toLowerCase().includes(search.toLowerCase()))
     );
 
     useEffect(() => {
@@ -54,26 +54,13 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
                     </span>
                 </div>
                 {isOpen && (
-                    <div 
-                        className="position-absolute w-100 shadow-lg rounded mt-1 overflow-auto custom-scrollbar" 
-                        style={{
-                            maxHeight: '220px', 
-                            zIndex: 1050, 
-                            top: '100%', 
-                            backgroundColor: darkMode ? '#1e293b' : '#fff', 
-                            border: darkMode ? '1px solid #475569' : '1px solid #dee2e6'
-                        }}
-                    >
+                    <div className="position-absolute w-100 shadow-lg rounded mt-1 overflow-auto custom-scrollbar" style={{maxHeight: '220px', zIndex: 1050, top: '100%', backgroundColor: darkMode ? '#1e293b' : '#fff', border: darkMode ? '1px solid #475569' : '1px solid #dee2e6'}}>
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map(opt => (
                                 <div 
                                     key={opt.value} 
                                     className={`p-2 border-bottom ${theme.text}`}
-                                    style={{
-                                        cursor: 'pointer', 
-                                        borderColor: darkMode ? '#334155' : '#f1f5f9',
-                                        backgroundColor: opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'
-                                    }}
+                                    style={{cursor: 'pointer', backgroundColor: opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'}}
                                     onMouseDown={() => { onChange(opt.value); setIsOpen(false); setSearch(''); }}
                                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = darkMode ? '#334155' : '#f8f9fa'}
                                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = opt.value === value ? (darkMode ? '#334155' : '#e9ecef') : 'transparent'}
@@ -82,9 +69,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
                                     {opt.subLabel && <div style={{fontSize: '0.7rem'}} className={theme.subText}>{opt.subLabel}</div>}
                                 </div>
                             ))
-                        ) : (
-                            <div className={`p-3 text-center small ${theme.subText}`}>No results found</div>
-                        )}
+                        ) : <div className={`p-3 text-center small ${theme.subText}`}>No results found</div>}
                     </div>
                 )}
             </div>
@@ -96,9 +81,10 @@ const SearchableSelect = ({ options, value, onChange, placeholder, label, theme,
 // 2. MAIN BILLING COMPONENT
 // ==========================================
 const Billing = () => {
-  const { customers, billingHistory, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
+  const { customers, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
 
   const [products, setProducts] = useState([]); 
+  const [todaysBills, setTodaysBills] = useState([]); // 🔥 Server-side filtered list
   const [custId, setCustId] = useState('');
   
   const [scheduleService, setScheduleService] = useState(false);
@@ -112,11 +98,10 @@ const Billing = () => {
   const [discount, setDiscount] = useState('');
   const [applyDiscount, setApplyDiscount] = useState(false);
   
-  // WARRANTY STATES
+  // Warranty States
   const [enableWarranty, setEnableWarranty] = useState(false);
   const [warrantyDuration, setWarrantyDuration] = useState('');
   const [warrantyUnit, setWarrantyUnit] = useState('Months'); 
-  // REMOVED: warrantyImageFile state (unused)
   const [uploadedImageUrl, setUploadedImageUrl] = useState(null); 
 
   const [cart, setCart] = useState([]);
@@ -126,23 +111,29 @@ const Billing = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [paidError, setPaidError] = useState(''); 
 
+  // --- 1. DATA FETCHING ---
   const fetchProducts = async () => {
     try {
         const res = await apiClient.get('/inventory/products?limit=500&status=active');
-        if (res.data && Array.isArray(res.data.data)) {
-            setProducts(res.data.data);
-        } else {
-            setProducts([]);
-        }
-    } catch (err) {
-        setProducts([]);
-    }
+        setProducts(res.data.data || []);
+    } catch (err) { setProducts([]); }
   };
 
-  useEffect(() => { fetchProducts(); }, []);
+  // 🔥 Fetch Today's Bills Only (Optimized)
+const fetchTodaysActivity = async () => {
+    try {
+        const res = await apiClient.get('/billing/history?filter=today');
+
+        setTodaysBills(res.data.data || []); 
+    } catch (err) { console.error("History fetch error", err); }
+};
+
+  useEffect(() => { 
+      fetchProducts(); 
+      fetchTodaysActivity(); 
+  }, []);
 
   const theme = {
-    container: darkMode ? 'bg-dark' : 'bg-light',
     text: darkMode ? 'text-white' : 'text-dark',
     subText: darkMode ? 'text-white-50' : 'text-secondary',
     card: darkMode ? 'bg-dark border-secondary text-white' : 'bg-white border-0 shadow-sm',
@@ -150,39 +141,42 @@ const Billing = () => {
     input: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-white border-light',
     inputReadOnly: darkMode ? 'bg-dark text-white-50 border-secondary' : 'bg-light text-dark',
     inputGroupText: darkMode ? 'bg-dark text-white border-secondary' : 'bg-light text-dark',
-    tableHead: darkMode ? 'table-dark' : 'table-light',
-    paymentBox: darkMode ? 'bg-dark border-secondary' : 'bg-light border',
     listGroupItem: darkMode ? 'bg-dark text-white border-secondary' : 'bg-white text-dark',
-    badge: darkMode ? 'bg-secondary text-white' : 'bg-light text-dark'
+    badge: darkMode ? 'bg-secondary text-white' : 'bg-light text-dark',
+    paymentBox: darkMode ? 'bg-dark border-secondary' : 'bg-light border'
   };
 
+  // --- 2. DYNAMIC OPTIONS ---
   const customerOptions = (customers || []).map(c => ({ value: c.id, label: c.name, subLabel: c.phone }));
-  const productOptions = (products || []).map(p => ({ value: p.id, label: p.name, subLabel: `Stock: ${p.stock_quantity} | ₹${p.sell_price}` }));
-  const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
   
-  const getTodayStr = () => {
-    const d = new Date();
-    const offset = d.getTimezoneOffset();
-    const dLocal = new Date(d.getTime() - (offset*60*1000));
-    return dLocal.toISOString().split('T')[0];
-  };
-
-  const todaysBills = (billingHistory || []).filter(h => {
-     const billDate = h.sale_date || h.created_at || '';
-     return billDate.startsWith(getTodayStr());
+  // 🔥 Warning in Dropdown for Low Stock
+  const productOptions = (products || []).map(p => {
+      const isLow = p.stock_quantity <= (p.low_stock_limit || 5);
+      return { 
+          value: p.id, 
+          label: p.name, 
+          subLabel: `${isLow ? '⚠️ ' : ''}Stock: ${p.stock_quantity}${isLow ? ' (Low)' : ''} | ₹${p.sell_price}` 
+      };
   });
+
+  const getRealtimeStock = (prod) => {
+    if(!prod) return 0;
+    const inCartQty = cart.reduce((total, item) => item.product_id === prod.id ? total + item.quantity : total, 0);
+    return Math.max(0, prod.stock_quantity - inCartQty);
+  };
 
   const handleProductSelect = (selectedId) => {
     setProdId(selectedId);
     const p = products.find(i => i.id === selectedId);
     if (p) { 
       setSelectedProduct(p); setPrice(p.sell_price); setDiscount(''); setQty(1); setErrorMsg(''); 
-      setWarrantyDuration(''); setWarrantyUnit('Months'); 
-      setUploadedImageUrl(null);
+      setWarrantyDuration(''); setWarrantyUnit('Months'); setUploadedImageUrl(null);
     } else { 
       setSelectedProduct(null); setPrice(0); 
     }
   };
+
+  const formatINR = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
 
   const handleQtyChange = (val) => {
     if (val === '' || isNaN(val)) { setQty(''); return; }
@@ -198,29 +192,6 @@ const Billing = () => {
     setDiscount(val === '' || val < 0 ? '' : parseFloat(val));
   };
 
-  const getRealtimeStock = (prod) => {
-    if(!prod) return 0;
-    const inCartQty = cart.reduce((total, item) => item.product_id === prod.id ? total + item.quantity : total, 0);
-    return Math.max(0, prod.stock_quantity - inCartQty);
-  };
-
-  const handleImageSelect = async (e) => {
-      const file = e.target.files[0];
-      if (!file) return;
-      
-      const formData = new FormData();
-      formData.append("file", file);
-      try {
-          Swal.showLoading();
-          // Updated to new route
-          const res = await apiClient.post("/warranty/upload", formData, { headers: { "Content-Type": "multipart/form-data" } });
-          setUploadedImageUrl(res.data.url);
-          Swal.close();
-      } catch (err) {
-          Swal.fire('Error', 'Failed to upload image.', 'error');
-      }
-  };
-
   const addToCart = (e) => {
     e.preventDefault();
     if (!selectedProduct) return;
@@ -228,9 +199,7 @@ const Billing = () => {
     const requestedQty = parseInt(qty) || 1;
     const availableStock = getRealtimeStock(selectedProduct);
 
-    if (requestedQty > availableStock) {
-        return setErrorMsg(`Insufficient Stock! Only ${availableStock} remaining.`);
-    }
+    if (requestedQty > availableStock) return setErrorMsg(`Insufficient Stock! Only ${availableStock} remaining.`);
 
     const finalDiscount = applyDiscount ? (parseFloat(discount) || 0) : 0;
     const finalUnitPrice = price - finalDiscount;
@@ -251,35 +220,15 @@ const Billing = () => {
       warranty_unit: (enableWarranty && warrantyDuration) ? warrantyUnit : null
     };
 
-    setCart(prevCart => {
-        const existingIdx = prevCart.findIndex(item => 
-            item.product_id === newItem.product_id && 
-            item.final_price === newItem.final_price &&
-            item.warranty_image === newItem.warranty_image && 
-            item.warranty_duration === newItem.warranty_duration &&
-            item.warranty_unit === newItem.warranty_unit
-        );
-
-        if (existingIdx > -1) {
-            const newCart = [...prevCart];
-            const existingItem = newCart[existingIdx];
-            newCart[existingIdx] = { ...existingItem, quantity: existingItem.quantity + newItem.quantity, total: existingItem.total + newItem.total };
-            return newCart;
-        } else {
-            return [...prevCart, newItem];
-        }
-    });
-
+    setCart(prev => [...prev, newItem]);
+    // Reset Inputs
     setProdId(''); setQty(1); setPrice(0); setDiscount(''); 
     setWarrantyDuration(''); setEnableWarranty(false); setApplyDiscount(false);
-    setUploadedImageUrl(null); 
-    setSelectedProduct(null); setErrorMsg('');
+    setUploadedImageUrl(null); setSelectedProduct(null); setErrorMsg('');
   };
 
   const removeFromCart = (index) => setCart(cart.filter((_, i) => i !== index));
 
-  const grandTotal = cart.reduce((acc, item) => acc + item.total, 0);
-  
   const handlePaidChange = (e) => {
       const val = e.target.value;
       if(val === '') { setPaid(''); setPaidError(''); return; }
@@ -288,12 +237,23 @@ const Billing = () => {
       setPaidError(numVal > grandTotal ? `Paid amount cannot exceed Total` : '');
   };
 
-  const balance = Math.max(0, grandTotal - (parseFloat(paid) || 0));
+  const handleImageSelect = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append("file", file);
+      try {
+          Swal.showLoading();
+          const res = await apiClient.post("/warranty/upload", formData, { headers: { "Content-Type": "multipart/form-data" } });
+          setUploadedImageUrl(res.data.url);
+          Swal.close();
+      } catch (err) { Swal.fire('Error', 'Image upload failed.', 'error'); }
+  };
 
   const handleSubmit = async () => {
     if (cart.length === 0) return Swal.fire('Error', "Cart is empty!", 'warning');
     if (!custId) return Swal.fire('Error', "Select a customer.", 'warning');
-    if ((parseFloat(paid) || 0) > grandTotal) return Swal.fire('Error', "Paid amount is greater than total!", 'error'); 
+    if ((parseFloat(paid) || 0) > grandTotal) return Swal.fire('Error', "Paid amount > Total!", 'error'); 
     
     setIsSubmitting(true);
     try {
@@ -303,241 +263,146 @@ const Billing = () => {
       };
 
       await apiClient.post('/billing/create', billData);
-      loadBilling(); loadDebtors(); loadReports(); fetchProducts(); 
+      fetchTodaysActivity(); 
+      fetchProducts();
+      loadBilling(); loadDebtors(); loadReports(); 
+      
       setCart([]); setPaid(''); setCustId(''); setScheduleService(false);
-      Swal.fire({ icon: 'success', title: 'Invoice Created!', timer: 2000, showConfirmButton: false });
+      Swal.fire({ icon: 'success', title: 'Invoice Created!', timer: 1500, showConfirmButton: false });
     } catch (err) { 
-      Swal.fire({ icon: 'error', title: 'Error', text: err.response?.data?.detail || "Failed" });
-    } finally { 
-      setIsSubmitting(false); 
-    }
+      Swal.fire({ icon: 'error', title: 'Failed', text: err.response?.data?.detail || "Error" });
+    } finally { setIsSubmitting(false); }
+  };
+
+  const getTodayStr = () => {
+    return new Date().toLocaleDateString('en-IN');
   };
 
   const toggleStatus = async (saleId) => {
-    const result = await Swal.fire({
-        title: 'Change Status?',
-        text: "Toggle between Accepted/Cancelled",
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, change it',
-        background: darkMode ? '#1e293b' : '#fff',
-        color: darkMode ? '#fff' : '#545454',
-    });
-
+    const result = await Swal.fire({ title: 'Cancel Bill?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Yes, Cancel' });
     if(result.isConfirmed) {
         try {
             await apiClient.put(`/billing/${saleId}/status`);
-            loadBilling(); 
-            Swal.fire({
-                title: 'Updated',
-                text: 'Status changed successfully.',
-                icon: 'success',
-                timer: 1500,
-                showConfirmButton: false,
-                background: darkMode ? '#1e293b' : '#fff',
-                color: darkMode ? '#fff' : '#545454',
-            });
-        } catch (err) {
-            Swal.fire('Error', 'Failed to update status', 'error');
-        }
+            fetchTodaysActivity(); // Update sidebar immediately
+            Swal.fire('Updated', 'Bill status changed.', 'success');
+        } catch (err) { Swal.fire('Error', 'Update failed', 'error'); }
     }
   };
 
-  // REMOVED: unused setReminder function
+  const grandTotal = cart.reduce((acc, item) => acc + item.total, 0);
+  const balance = Math.max(0, grandTotal - (parseFloat(paid) || 0));
 
   return (
-    <div className={`container-fluid p-4 custom-scrollbar`} style={{ height: '100vh', overflowY: 'auto', overflowX: 'hidden', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa' }}>
+    <div className={`container-fluid p-4 custom-scrollbar`} style={{ height: '100vh', overflowY: 'auto', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa' }}>
       
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h3 className={`fw-bold m-0 ${theme.text}`}>Billing & Invoicing</h3>
-          <p className={`small m-0 ${theme.subText}`}>Create new sales and manage invoices.</p>
-        </div>
+      <div className="d-flex justify-content-between mb-4">
+        <h3 className={`fw-bold ${theme.text}`}>Billing Hub</h3>
+        <div className={`small ${theme.subText}`}>Date: {getTodayStr()}</div>
       </div>
 
       <div className="row g-4">
         {/* LEFT: INVOICE BUILDER */}
         <div className="col-lg-8">
           <div className={`card h-100 ${theme.card}`}>
-            <div className={`card-header pt-4 pb-0 ${theme.cardHeader}`}>
-              <h5 className={`fw-bold m-0 ${theme.text}`}><i className="bi bi-receipt me-2 text-primary"></i>New Invoice</h5>
-            </div>
+            <div className={`card-header pt-4 pb-0 ${theme.cardHeader}`}><h5 className="fw-bold"><i className="bi bi-receipt me-2 text-primary"></i>New Invoice</h5></div>
             <div className="card-body p-4">
               
               <div className="row g-3 mb-4">
-                <div className="col-md-6">
-                  <SearchableSelect label="Select Customer" placeholder="Search name or phone..." options={customerOptions} value={custId} onChange={setCustId} theme={theme} darkMode={darkMode} />
-                </div>
-                <div className="col-md-6 d-flex align-items-center pt-2">
-                    <div className="form-check form-switch ps-0 mt-3">
-                        <label className={`form-check-label fw-bold ms-5 ${theme.text}`} htmlFor="serviceToggle">Schedule Service?</label>
-                        <input className="form-check-input ms-2" type="checkbox" id="serviceToggle" checked={scheduleService} onChange={e => setScheduleService(e.target.checked)} style={{transform: 'scale(1.2)'}}/>
+                <div className="col-md-6"><SearchableSelect label="Customer" placeholder="Search..." options={customerOptions} value={custId} onChange={setCustId} theme={theme} darkMode={darkMode} /></div>
+                <div className="col-md-6 d-flex align-items-center pt-3">
+                    <div className="form-check form-switch ms-4">
+                        <input className="form-check-input" type="checkbox" checked={scheduleService} onChange={e => setScheduleService(e.target.checked)} />
+                        <label className={`form-check-label fw-bold ms-2 ${theme.text}`}>Schedule Service</label>
                     </div>
                 </div>
               </div>
 
               {scheduleService && (
-                    <div className={`p-3 rounded border border-dashed mb-4 animate__animated animate__fadeIn ${darkMode ? 'border-secondary' : 'bg-light'}`}>
+                  <div className={`p-3 rounded border border-dashed mb-4 ${darkMode ? 'border-secondary' : 'bg-light'}`}>
                       <div className="row g-3">
-                          <div className="col-md-6">
-                              <label className={`small fw-bold ${theme.subText}`}>Service Date</label>
-                              <input type="date" className={`form-control ${theme.input}`} value={serviceDate} onChange={e => setServiceDate(e.target.value)} />
-                          </div>
-                          <div className="col-md-6">
-                              <label className={`small fw-bold ${theme.subText}`}>Task Type</label>
-                              <select className={`form-select ${theme.input}`} value={serviceType} onChange={e => setServiceType(e.target.value)}>
-                                  <option value="Installation">Installation</option>
-                                  <option value="General Service">General Service</option>
-                                  <option value="Repair">Repair</option>
-                              </select>
-                          </div>
+                          <div className="col-md-6"><label className="small fw-bold">Date</label><input type="date" className={`form-control ${theme.input}`} value={serviceDate} onChange={e => setServiceDate(e.target.value)} /></div>
+                          <div className="col-md-6"><label className="small fw-bold">Task</label><select className={`form-select ${theme.input}`} value={serviceType} onChange={e => setServiceType(e.target.value)}><option>Installation</option><option>Service</option><option>Repair</option></select></div>
                       </div>
-                    </div>
+                  </div>
               )}
 
-              <hr className={`opacity-25 my-4 ${darkMode ? 'text-white' : 'text-muted'}`}/>
+              <hr className={theme.text} />
 
               <form onSubmit={addToCart} className="mb-4">
-                <div className="d-flex justify-content-between align-items-center mb-2">
-                    <h6 className={`fw-bold m-0 ${theme.text}`}>Add Items</h6>
+                <div className="d-flex justify-content-between mb-2">
+                    <h6 className={`fw-bold ${theme.text}`}>Add Items</h6>
                     <div className="d-flex gap-3">
-                        <div className="form-check form-switch">
-                            <input className="form-check-input" type="checkbox" id="discSwitch" checked={applyDiscount} onChange={() => setApplyDiscount(!applyDiscount)} />
-                            <label className={`form-check-label small ${theme.subText}`} htmlFor="discSwitch">Discount</label>
-                        </div>
-                        <div className="form-check form-switch">
-                            <input className="form-check-input" type="checkbox" id="warrantySwitch" checked={enableWarranty} onChange={() => setEnableWarranty(!enableWarranty)} />
-                            <label className={`form-check-label small ${theme.subText}`} htmlFor="warrantySwitch">Warranty</label>
-                        </div>
+                        <div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={applyDiscount} onChange={() => setApplyDiscount(!applyDiscount)} /><label className={`form-check-label small ${theme.subText}`}>Discount</label></div>
+                        <div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={enableWarranty} onChange={() => setEnableWarranty(!enableWarranty)} /><label className={`form-check-label small ${theme.subText}`}>Warranty</label></div>
                     </div>
                 </div>
 
                 <div className="row g-3 align-items-end">
-                  
-                  <div className={applyDiscount || enableWarranty ? "col-md-3" : "col-md-4"}>
-                    <SearchableSelect label="Product" placeholder="Search product..." options={productOptions} value={prodId} onChange={handleProductSelect} theme={theme} darkMode={darkMode} />
-                    {selectedProduct && (
-                        <div className={`small mt-1 fw-bold ${getRealtimeStock(selectedProduct) === 0 ? 'text-danger' : 'text-success'}`}>
-                            Stock: {getRealtimeStock(selectedProduct)} 
-                            <span className="text-muted fw-normal ms-2">| Net: ₹{selectedProduct.net_price}</span>
-                        </div>
-                    )}
+                  <div className={applyDiscount || enableWarranty ? "col-md-4" : "col-md-6"}>
+                    <SearchableSelect label="Product" placeholder="Search..." options={productOptions} value={prodId} onChange={handleProductSelect} theme={theme} darkMode={darkMode} />
+                    {selectedProduct && <div className={`small mt-1 ${getRealtimeStock(selectedProduct) < (selectedProduct.low_stock_limit || 5) ? 'text-warning' : 'text-success'}`}>Stock: {getRealtimeStock(selectedProduct)} | Net: ₹{selectedProduct.net_price}</div>}
                   </div>
-                  
+                  <div className="col-md-2"><label className="small fw-bold">MRP</label><input type="text" className={`form-control ${theme.inputReadOnly}`} value={price} readOnly /></div>
                   <div className="col-md-2">
-                    <label className={`small fw-bold mb-1 ${theme.subText}`}>MRP</label>
-                    <div className="input-group">
-                        <span className={`input-group-text border-end-0 ${theme.inputGroupText}`}>₹</span>
-                        <input type="text" className={`form-control border-start-0 fw-bold ${theme.inputReadOnly}`} value={price} readOnly />
-                    </div>
+                      <label className="small fw-bold">Qty</label>
+                      <div className="input-group">
+                          {/* 🔥 UPDATED: Using handlers */}
+                          <button type="button" className="btn btn-outline-secondary px-2" onClick={decrementQty}>-</button>
+                          <input type="number" className={`form-control text-center px-1 ${theme.input}`} value={qty} onChange={(e) => handleQtyChange(e.target.value)} />
+                          <button type="button" className="btn btn-outline-secondary px-2" onClick={incrementQty}>+</button>
+                      </div>
                   </div>
-
-                  <div className="col-md-2">
-                    <label className={`small fw-bold mb-1 ${theme.subText}`}>Qty</label>
-                    <div className="input-group">
-                        <button type="button" className={`btn px-2 ${darkMode ? 'btn-outline-light' : 'btn-outline-secondary'}`} onClick={decrementQty}>-</button>
-                        <input type="number" className={`form-control text-center px-1 ${theme.input}`} value={qty} onChange={(e) => handleQtyChange(e.target.value)} min="1" required />
-                        <button type="button" className={`btn px-2 ${darkMode ? 'btn-outline-light' : 'btn-outline-secondary'}`} onClick={incrementQty}>+</button>
-                    </div>
-                  </div>
-
+                  
                   {applyDiscount && (
-                    <div className="col-md-2 animate__animated animate__fadeIn">
-                      <label className={`small fw-bold mb-1 ${theme.subText}`}>Discount</label>
-                      <input type="number" className={`form-control ${theme.input}`} value={discount} onChange={handleDiscountChange} placeholder="0" />
-                    </div>
+                      <div className="col-md-2">
+                          <label className="small fw-bold">Disc</label>
+                          {/* 🔥 UPDATED: Using handler */}
+                          <input type="number" className={`form-control ${theme.input}`} value={discount} onChange={handleDiscountChange} />
+                      </div>
                   )}
-
+                  
                   {enableWarranty && (
-                    <div className="col-md-3 animate__animated animate__fadeIn">
-                        <label className={`small fw-bold mb-1 ${theme.subText}`}>Warranty Info</label>
-                        <div className="input-group mb-1">
-                            <input type="number" className={`form-control form-control-sm ${theme.input}`} placeholder="Dur" value={warrantyDuration} onChange={e => setWarrantyDuration(e.target.value)} />
-                            <select className={`form-select form-select-sm ${theme.input}`} value={warrantyUnit} onChange={e => setWarrantyUnit(e.target.value)} style={{maxWidth: '70px'}}>
-                                <option value="Days">D</option>
-                                <option value="Months">M</option>
-                                <option value="Years">Y</option>
-                            </select>
-                        </div>
-                        <div className="input-group input-group-sm">
-                            <input type="file" className={`form-control ${theme.input}`} accept="image/*,application/pdf" onChange={handleImageSelect} />
-                        </div>
-                        {uploadedImageUrl && <div className="small text-success mt-1"><i className="bi bi-check-circle"></i> Proof Attached</div>}
+                    <div className="col-md-12 mt-2 row g-2">
+                        <div className="col-4"><input type="number" className={`form-control form-control-sm ${theme.input}`} placeholder="Duration" value={warrantyDuration} onChange={e => setWarrantyDuration(e.target.value)} /></div>
+                        <div className="col-4"><select className={`form-select form-select-sm ${theme.input}`} value={warrantyUnit} onChange={e => setWarrantyUnit(e.target.value)}><option>Months</option><option>Years</option></select></div>
+                        <div className="col-4"><input type="file" className={`form-control form-control-sm ${theme.input}`} onChange={handleImageSelect} /></div>
                     </div>
                   )}
 
-                  <div className="col-md-1 d-flex align-items-end flex-fill">
-                    <button className="btn btn-primary w-100 fw-bold" disabled={!selectedProduct || getRealtimeStock(selectedProduct) <= 0}>
-                        <i className="bi bi-plus-lg"></i>
-                    </button>
-                  </div>
+                  <div className="col-md-2"><button className="btn btn-primary w-100 fw-bold" disabled={!selectedProduct}><i className="bi bi-plus-lg"></i> Add</button></div>
                 </div>
-                
-                {errorMsg && <div className="alert alert-danger py-1 px-2 mt-2 small">{errorMsg}</div>}
+                {errorMsg && <div className="alert alert-danger py-1 mt-2 small">{errorMsg}</div>}
               </form>
 
-              {/* 4. CART TABLE */}
+              {/* CART TABLE */}
               <div className={`table-responsive border rounded-3 mb-4 ${darkMode ? 'border-secondary' : ''}`}>
-                <table className={`table table-hover mb-0 align-middle text-center ${darkMode ? 'table-dark' : ''}`}>
-                  <thead className={`${theme.tableHead} small text-uppercase`}>
-                    <tr>
-                        <th className="text-start ps-4">Item</th>
-                        <th className="text-start">Warranty</th> 
-                        <th>Price</th>
-                        <th>Qty</th>
-                        <th className="text-end pe-4">Total</th>
-                        <th></th>
-                    </tr>
-                  </thead>
+                <table className={`table mb-0 align-middle ${darkMode ? 'table-dark' : ''}`}>
+                  <thead className={theme.tableHead}><tr><th className="ps-3">Item</th><th>Price</th><th>Qty</th><th className="text-end">Total</th><th></th></tr></thead>
                   <tbody>
-                    {cart.length === 0 ? (
-                      <tr><td colSpan="6" className={`py-5 ${theme.subText}`}>No items added.</td></tr>
-                    ) : (
-                      cart.map((item, idx) => (
-                        <tr key={idx} className={darkMode ? 'border-secondary' : ''}>
-                          <td className={`text-start ps-4 fw-bold ${theme.text}`}>
-                              {item.product_name}
-                              <div className="small opacity-75 fw-normal">
-                                {item.warranty_duration > 0 && <span className="text-success font-monospace">Warranty: {item.warranty_duration} {item.warranty_unit}</span>}
-                              </div>
-                          </td>
-                          <td className="text-start" style={{minWidth: '160px'}}>
-                              {item.warranty_image ? (
-                                  <div className="d-flex align-items-center gap-2">
-                                      <span className="badge bg-success small">Attached</span>
-                                      <a href={item.warranty_image} target="_blank" rel="noreferrer" className="small text-decoration-none">View</a>
-                                  </div>
-                              ) : <span className="text-muted small">-</span>}
-                          </td>
-                          <td className={theme.text}>₹{item.unit_price}</td>
-                          <td className={theme.text}>{item.quantity}</td>
-                          <td className={`text-end pe-4 fw-bold ${theme.text}`}>₹{item.total.toLocaleString('en-IN')}</td>
-                          <td><button className="btn btn-sm text-danger" onClick={() => removeFromCart(idx)}><i className="bi bi-trash"></i></button></td>
+                    {cart.map((item, idx) => (
+                        <tr key={idx}>
+                            <td className="ps-3 fw-bold">{item.product_name}<br/><small className="fw-normal text-muted">{item.warranty_duration > 0 ? `Warranty: ${item.warranty_duration} ${item.warranty_unit}` : ''}</small></td>
+                            <td>₹{item.unit_price}</td>
+                            <td>{item.quantity}</td>
+                            <td className="text-end fw-bold">₹{item.total}</td>
+                            {/* 🔥 UPDATED: Using handler */}
+                            <td><button className="btn btn-sm text-danger" onClick={() => removeFromCart(idx)}><i className="bi bi-trash"></i></button></td>
                         </tr>
-                      ))
-                    )}
+                    ))}
+                    {cart.length === 0 && <tr><td colSpan="5" className="text-center py-4 text-muted">Cart is empty</td></tr>}
                   </tbody>
                 </table>
               </div>
 
-              {/* 5. PAYMENT SECTION */}
+              {/* PAYMENT BOX */}
               <div className="row justify-content-end">
                 <div className="col-md-5">
                     <div className={`p-3 rounded border ${theme.paymentBox}`}>
-                        <div className={`d-flex justify-content-between mb-2 ${theme.text}`}>
-                            <span>Subtotal:</span><span className="fw-bold">₹{grandTotal.toLocaleString('en-IN')}</span>
-                        </div>
-                        <div className="input-group mb-2">
-                            <span className={`input-group-text fw-bold ${theme.inputGroupText}`}>Paid ₹</span>
-                            <input type="number" className={`form-control fw-bold ${theme.input} ${paidError ? 'is-invalid' : ''}`} value={paid} onChange={handlePaidChange} placeholder="0"/>
-                        </div>
+                        <div className={`d-flex justify-content-between mb-2 ${theme.text}`}><span>Total:</span><span className="fw-bold">₹{grandTotal}</span></div>
+                        <div className="input-group mb-2"><span className={`input-group-text ${theme.inputGroupText}`}>Paid ₹</span><input type="number" className={`form-control fw-bold ${theme.input}`} value={paid} onChange={handlePaidChange} /></div>
                         {paidError && <small className="text-danger d-block mb-2">{paidError}</small>}
-                        <div className="d-flex justify-content-between border-top pt-2">
-                            <span className="fs-5 fw-bold text-danger">Balance Due:</span><span className="fs-5 fw-bold text-danger">₹{balance.toLocaleString('en-IN')}</span>
-                        </div>
-                        <button className="btn btn-success w-100 mt-3 py-2 fw-bold shadow-sm" onClick={handleSubmit} disabled={isSubmitting || cart.length === 0}>
-                            {isSubmitting ? <span className="spinner-border spinner-border-sm me-2"></span> : <i className="bi bi-check-lg me-2"></i>} GENERATE BILL
-                        </button>
+                        <div className="d-flex justify-content-between pt-2 border-top"><span className="text-danger fw-bold">Balance:</span><span className="text-danger fw-bold">₹{balance}</span></div>
+                        <button className="btn btn-success w-100 mt-3 fw-bold" onClick={handleSubmit} disabled={isSubmitting || cart.length === 0}>Generate Bill</button>
                     </div>
                 </div>
               </div>
@@ -549,30 +414,22 @@ const Billing = () => {
         {/* RIGHT: RECENT BILLS */}
         <div className="col-lg-4">
           <div className={`card h-100 ${theme.card}`}>
-            <div className={`card-header pt-4 pb-2 ${theme.cardHeader} d-flex justify-content-between align-items-center`}>
-              <h6 className={`fw-bold m-0 ${theme.text}`}>Today's Activity</h6>
-              <span className={`badge ${theme.badge}`}>{getTodayStr()}</span>
+            <div className={`card-header pt-3 ${theme.cardHeader} d-flex justify-content-between`}>
+                <h6 className={`fw-bold m-0 ${theme.text}`}>Today's Activity</h6>
+                <span className={`badge ${theme.badge}`}>{todaysBills.length} Bills</span>
             </div>
-            <div className="card-body p-0">
-                <div className="list-group list-group-flush">
-                    {todaysBills.length === 0 ? <div className={`text-center py-5 ${theme.subText}`}>No bills generated today.</div> : 
-                        todaysBills.map(b => (
-                            <div key={b.id} className={`list-group-item d-flex justify-content-between align-items-center py-3 ${theme.listGroupItem}`}>
-                                <div><div className={`fw-bold ${theme.text}`}>{b.users?.name || 'Unknown'}</div><small className={theme.subText}>Inv: #{b.invoice_no}</small></div>
-                                <div className="text-end">
-                                    <div className={`fw-bold ${theme.text}`}>₹{b.total_amount.toLocaleString('en-IN')}</div>
-                                    <span 
-                                        onClick={() => toggleStatus(b.id)} 
-                                        className={`badge ${b.invoice_status === 'Cancelled' ? 'bg-danger' : 'bg-success'}`}
-                                        style={{cursor: 'pointer'}}
-                                    >
-                                        {b.invoice_status}
-                                    </span>
-                                </div>
+            <div className="card-body p-0 overflow-auto" style={{maxHeight: 'calc(100vh - 180px)'}}>
+                {todaysBills.length === 0 ? <div className={`text-center py-5 ${theme.subText}`}>No sales yet today.</div> : 
+                    todaysBills.map(b => (
+                        <div key={b.id} className={`p-3 border-bottom d-flex justify-content-between align-items-center ${theme.listGroupItem}`}>
+                            <div><div className={`fw-bold ${theme.text}`}>{b.users?.name || 'Unknown'}</div><small className={theme.subText}>#{b.invoice_no}</small></div>
+                            <div className="text-end">
+                                <div className={`fw-bold ${theme.text}`}>₹{b.total_amount}</div>
+                                <span onClick={() => toggleStatus(b.id)} className={`badge ${b.invoice_status === 'Cancelled' ? 'bg-danger' : 'bg-success'}`} style={{cursor: 'pointer'}}>{b.invoice_status}</span>
                             </div>
-                        ))
-                    }
-                </div>
+                        </div>
+                    ))
+                }
             </div>
           </div>
         </div>

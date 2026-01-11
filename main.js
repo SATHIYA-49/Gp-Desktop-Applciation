@@ -24,7 +24,9 @@ function createWindow() {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      devTools: !app.isPackaged,
+      devTools:false
     }
   });
 
@@ -35,7 +37,17 @@ function createWindow() {
     const indexPath = path.join(app.getAppPath(), "build", "index.html");
     win.loadURL(`file://${indexPath}`);
   }
-
+// 🔥 STRICTLY BLOCK KEYBOARD SHORTCUTS (F12, Ctrl+Shift+I, Ctrl+Shift+R)
+  win.webContents.on("before-input-event", (event, input) => {
+    if (
+      input.key === "F12" || 
+      (input.control && input.shift && input.key === "I") || 
+      (input.control && input.shift && input.key === "R")
+    ) {
+      event.preventDefault(); // 🛑 STOP THE ACTION
+      console.log("DevTools Blocked!");
+    }
+  });
   win.once("ready-to-show", () => {
     win.show();
     // Auto update only in production

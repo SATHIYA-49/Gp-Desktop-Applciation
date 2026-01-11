@@ -186,7 +186,6 @@ const Sidebar = () => {
         <div style={styles.brandDetails}>
             <div style={{...styles.brandText, color: darkMode ? '#fff' : '#000', fontWeight:'bold'}}>GOLDEN POWER</div>
             <div style={{ fontSize: '0.7rem', fontWeight: '500', color: '#f59e0b', marginTop: '-2px' }}>
-                ENTERPRISE
             </div>
         </div>
       </div>

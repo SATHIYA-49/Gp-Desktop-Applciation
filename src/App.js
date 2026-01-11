@@ -16,6 +16,7 @@ import Accounts from './pages/Accounts';
 import Settings from './pages/Settings';
 import ViewBills from './pages/ViewBills';
 import Inventory from './pages/Inventory';
+import RestockHistory from './pages/inventory/RestockHistory';
 import WarrantyManager from './pages/WarrantyManager';
 import Services from './pages/Services';
 import Employees from './pages/Employees'; 
@@ -60,6 +61,7 @@ const AppContent = () => {
             <Route path="/accounts" element={<Accounts />} />
             <Route path="/services" element={<Services />} />
             <Route path="/inventory" element={<Inventory />} />
+            <Route path="/inventory/history" element={<RestockHistory />} />
             <Route path="/employees" element={<Employees />} />
             
             {/* Reports */}
