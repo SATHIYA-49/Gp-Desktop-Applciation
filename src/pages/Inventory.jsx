@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import apiClient from '../api/client';
 import { GlobalContext } from '../context/GlobalState';
 import LowStockAlert from '../components/LowStockAlert'; 
 import { useNavigate } from 'react-router-dom';
+
 // --- DEBOUNCE HOOK ---
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -21,6 +22,9 @@ const Inventory = () => {
   const [productsData, setProductsData] = useState([]); 
   const [pagination, setPagination] = useState({ current_page: 1, total_pages: 1, total_items: 0 });
   const [loading, setLoading] = useState(false);
+  
+  // 🔥 STOP THE LOOP: Use a Ref to track if we already tried loading
+  const hasFetchedMasterData = useRef(false);
 
   // --- FILTERS ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,7 +39,6 @@ const Inventory = () => {
   const [confirmModal, setConfirmModal] = useState({ show: false, id: null, type: null, title: '' });
 
   // --- FORM DATA ---
-  // 🔥 SKU Removed, low_stock_limit Added
   const [newProduct, setNewProduct] = useState({
     name: '', brand_id: '', category_id: '', sub_category_id: '', 
     net_price: '', sell_price: '', warranty_details: '', 
@@ -44,8 +47,6 @@ const Inventory = () => {
   });
   const [filteredSubs, setFilteredSubs] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null); 
-
-  // Restock Data
   const [restockData, setRestockData] = useState({ id: null, name: '', qty: '', received_date: '' });
 
   // Master Data State
@@ -74,7 +75,7 @@ const Inventory = () => {
 
   // --- 1. FETCH PRODUCTS ---
   const fetchProducts = useCallback(async (page = 1) => {
-    setLoading(true);
+    setLoading(true); 
     try {
       const res = await apiClient.get('/inventory/products', {
         params: { page, limit: 10, status: activeTab, search: debouncedSearch }
@@ -82,23 +83,35 @@ const Inventory = () => {
       setProductsData(res.data.data || []); 
       setPagination(res.data.pagination || { current_page: 1, total_pages: 1, total_items: 0 });
     } catch (error) {
-      setProductsData([]);
+      console.error("Fetch Products Error:", error);
     } finally {
-      setLoading(false);
+      setLoading(false); 
     }
   }, [activeTab, debouncedSearch]);
 
+  // =========================================================
+  // 🔥 FIX: THE BULLETPROOF LOADER (NO LOOP)
+  // =========================================================
   useEffect(() => {
-    loadInventoryData(); 
+    if (brands.length > 0) return;
+    if (hasFetchedMasterData.current === true) return;
+
+    console.log("🚀 Initializing Inventory Master Data...");
+    hasFetchedMasterData.current = true; 
+    loadInventoryData();
+    // eslint-disable-next-line
+  }, []); 
+
+  // Load products when search or tab changes
+  useEffect(() => {
     fetchProducts(1);    
-  }, [fetchProducts, loadInventoryData]); 
+  }, [fetchProducts]); 
 
   const showAlert = (type, message) => {
     setAlertInfo({ show: true, type, message });
     setTimeout(() => setAlertInfo({ show: false, type: '', message: '' }), 2500);
   };
 
-  // --- HELPER FUNCTIONS ---
   const getBrandName = (id) => brands.find(b => b.id === id)?.name || 'Unknown';
   const getCatName = (id) => categories.find(c => c.id === id)?.name || 'Unknown';
   const getSubName = (id) => subCategories.find(s => s.id === id)?.name || '-';
@@ -122,7 +135,6 @@ const Inventory = () => {
   // --- FORM HANDLERS ---
   const openCreateModal = () => {
       setEditingProduct(null);
-      // 🔥 Reset form with no SKU
       setNewProduct({ name: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '', low_stock_limit: '', is_active: true });
       setFilteredSubs([]);
       setShowAddModal(true);
@@ -132,14 +144,13 @@ const Inventory = () => {
       setEditingProduct(product);
       setNewProduct({
           name: product.name, 
-          // SKU is intentionally omitted here as it's auto-generated/readonly
           brand_id: product.brand_id, 
           category_id: product.category_id,
           sub_category_id: product.sub_category_id || '', 
           net_price: product.net_price || '', 
           sell_price: product.sell_price || '',
           warranty_details: product.warranty_details || '', 
-          low_stock_limit: product.low_stock_limit || '', // 🔥 Load existing threshold
+          low_stock_limit: product.low_stock_limit || '',
           is_active: product.is_active ?? true
       });
       setFilteredSubs(subCategories.filter(s => String(s.category_id) === String(product.category_id)));
@@ -160,13 +171,13 @@ const Inventory = () => {
     try {
       const payload = { 
         ...newProduct, 
-        sku: null, // 🔥 Backend will auto-generate
+        sku: null,
         brand_id: String(newProduct.brand_id), 
         category_id: String(newProduct.category_id),
         sub_category_id: newProduct.sub_category_id ? String(newProduct.sub_category_id) : null,
         net_price: parseFloat(newProduct.net_price), 
         sell_price: parseFloat(newProduct.sell_price),
-        low_stock_limit: parseInt(newProduct.low_stock_limit), // 🔥 Parse threshold as INT
+        low_stock_limit: parseInt(newProduct.low_stock_limit),
         specifications: editingProduct ? editingProduct.specifications : {}
       };
 
@@ -239,12 +250,14 @@ const Inventory = () => {
 
   return (
     <div className={`container-fluid p-4 ${theme.text}`} style={{ minHeight: '100vh', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa', position: 'relative' }}>
+      
       <button 
-       className="btn btn-outline-primary" 
-       onClick={() => navigate('/inventory/history')}
-    >
-       <i className="bi bi-clock-history me-2"></i> View Restock History
-    </button>
+        className="btn btn-outline-primary" 
+        onClick={() => navigate('/inventory/history')}
+      >
+        <i className="bi bi-clock-history me-2"></i> View Restock History
+      </button>
+
       {/* ALERTS & WIDGETS */}
       {alertInfo.show && (
         <div className="shadow-lg rounded animate__animated animate__slideInDown" style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 10000, backgroundColor: darkMode ? '#2c3034' : '#fff', borderLeft: `5px solid ${alertInfo.type === 'success' ? '#198754' : '#dc3545'}`, padding: '12px 20px', display: 'flex', alignItems: 'center' }}>
@@ -276,53 +289,65 @@ const Inventory = () => {
         </div>
       </div>
 
-      {/* TABLE */}
-      <div className={`card overflow-hidden ${theme.card}`}>
-        <div className="table-responsive">
-            <table className={`table align-middle mb-0 ${theme.table}`}>
-                <thead className={theme.tableHeader}>
-                    <tr><th className="ps-4">Product Name</th><th>Brand</th><th>Category</th><th>Sub-Cat</th><th>Status</th><th>Stock</th><th>Price</th><th className="text-end pe-4">Actions</th></tr>
-                </thead>
-                <tbody className={darkMode ? 'border-secondary' : ''}>
-                    {loading ? ( <tr><td colSpan="8" className="text-center py-5">Loading...</td></tr> ) : productsData.map(p => (
-                        <tr key={p.id} className={!p.is_active ? 'opacity-50' : ''}>
-                            {/* 🔥 SKU Removed from display */}
-                            <td className="ps-4"><div className="fw-bold">{p.name}</div><div className="small opacity-50">{p.sku}</div></td>
-                            <td>{getBrandName(p.brand_id)}</td>
-                            <td>{getCatName(p.category_id)}</td>
-                            <td>{getSubName(p.sub_category_id)}</td>
-                            <td>
-                              <div className="form-check form-switch">
-                                <input className="form-check-input" type="checkbox" checked={p.is_active ?? true} onChange={() => toggleActiveStatus(p)} />
-                              </div>
-                            </td>
-                            {/* 🔥 DYNAMIC LOW STOCK INDICATOR */}
-                            <td>
-                                <span className={`badge rounded-pill px-3 py-2 ${p.stock_quantity <= p.low_stock_limit ? 'bg-danger animate__animated animate__flash animate__infinite' : 'bg-success-subtle text-success'}`}>
-                                    {p.stock_quantity} Units
-                                </span>
-                                {p.stock_quantity <= p.low_stock_limit && (
-                                  <div className="text-danger x-small fw-bold mt-1">Reorder Now</div>
-                                )}
-                            </td>
-                            <td className="fw-bold">₹{p.sell_price}</td>
-                            <td className="text-end pe-4">
-                                <button className="btn btn-sm btn-outline-warning me-2" onClick={() => openRestockModal(p)}><i className="bi bi-box-arrow-in-down"></i></button>
-                                <button className="btn btn-sm btn-outline-info me-2" onClick={() => openEditModal(p)}><i className="bi bi-pencil-square"></i></button>
-                                <button className="btn btn-sm btn-outline-danger" onClick={() => promptDelete(p.id, 'product', p.name)}><i className="bi bi-trash"></i></button>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-        <div className="card-footer d-flex justify-content-between align-items-center py-3">
-          <small className={theme.subText}>Page {pagination.current_page} of {pagination.total_pages}</small>
-          <div className="btn-group">
-            <button className="btn btn-sm btn-outline-secondary" disabled={pagination.current_page === 1} onClick={() => handlePageChange(pagination.current_page - 1)}>Prev</button>
-            <button className="btn btn-sm btn-outline-secondary" disabled={pagination.current_page === pagination.total_pages} onClick={() => handlePageChange(pagination.current_page + 1)}>Next</button>
-          </div>
-        </div>
+      {/* TABLE / LOADING AREA */}
+      <div className={`card overflow-hidden ${theme.card}`} style={{ minHeight: '400px' }}>
+        {loading ? (
+           <div className="d-flex flex-column justify-content-center align-items-center h-100 py-5">
+             <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }} role="status">
+                <span className="visually-hidden">Loading...</span>
+             </div>
+             <p className={`mt-3 fw-bold ${theme.subText} animate__animated animate__pulse animate__infinite`}>Loading Inventory Data...</p>
+           </div>
+        ) : (
+           <>
+            <div className="table-responsive">
+                <table className={`table align-middle mb-0 ${theme.table}`}>
+                    <thead className={theme.tableHeader}>
+                        <tr><th className="ps-4">Product Name</th><th>Brand</th><th>Category</th><th>Sub-Cat</th><th>Status</th><th>Stock</th><th>Price</th><th className="text-end pe-4">Actions</th></tr>
+                    </thead>
+                    <tbody className={darkMode ? 'border-secondary' : ''}>
+                        {productsData.length === 0 ? (
+                            <tr><td colSpan="8" className="text-center py-5 text-muted">No products found.</td></tr>
+                        ) : productsData.map(p => (
+                            <tr key={p.id} className={!p.is_active ? 'opacity-50' : ''}>
+                                <td className="ps-4"><div className="fw-bold">{p.name}</div><div className="small opacity-50">{p.sku}</div></td>
+                                <td>{getBrandName(p.brand_id)}</td>
+                                <td>{getCatName(p.category_id)}</td>
+                                <td>{getSubName(p.sub_category_id)}</td>
+                                <td>
+                                <div className="form-check form-switch">
+                                    <input className="form-check-input" type="checkbox" checked={p.is_active ?? true} onChange={() => toggleActiveStatus(p)} />
+                                </div>
+                                </td>
+                                <td>
+                                    <span className={`badge rounded-pill px-3 py-2 ${p.stock_quantity <= p.low_stock_limit ? 'bg-danger animate__animated animate__flash animate__infinite' : 'bg-success-subtle text-success'}`}>
+                                        {p.stock_quantity} Units
+                                    </span>
+                                    {p.stock_quantity <= p.low_stock_limit && (
+                                    <div className="text-danger x-small fw-bold mt-1">Reorder Now</div>
+                                    )}
+                                </td>
+                                <td className="fw-bold">₹{p.sell_price}</td>
+                                <td className="text-end pe-4">
+                                    <button className="btn btn-sm btn-outline-warning me-2" onClick={() => openRestockModal(p)}><i className="bi bi-box-arrow-in-down"></i></button>
+                                    <button className="btn btn-sm btn-outline-info me-2" onClick={() => openEditModal(p)}><i className="bi bi-pencil-square"></i></button>
+                                    <button className="btn btn-sm btn-outline-danger" onClick={() => promptDelete(p.id, 'product', p.name)}><i className="bi bi-trash"></i></button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div className="card-footer d-flex justify-content-between align-items-center py-3">
+              <small className={theme.subText}>Page {pagination.current_page} of {pagination.total_pages}</small>
+              <div className="btn-group">
+                <button className="btn btn-sm btn-outline-secondary" disabled={pagination.current_page === 1} onClick={() => handlePageChange(pagination.current_page - 1)}>Prev</button>
+                <button className="btn btn-sm btn-outline-secondary" disabled={pagination.current_page === pagination.total_pages} onClick={() => handlePageChange(pagination.current_page + 1)}>Next</button>
+              </div>
+            </div>
+           </>
+        )}
       </div>
 
       {/* MODAL: ADD/EDIT */}
@@ -335,7 +360,6 @@ const Inventory = () => {
                         <form onSubmit={submitProduct}>
                             <div className="row g-3">
                                 <div className="col-12"><label className="form-label small fw-bold">Name</label><input type="text" className={`form-control ${theme.input}`} required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} /></div>
-                                {/* 🔥 SKU INPUT REMOVED */}
                                 <div className="col-md-6"><label className="form-label small fw-bold">Brand</label><select className={`form-select ${theme.input}`} required value={newProduct.brand_id} onChange={e => setNewProduct({...newProduct, brand_id: e.target.value})}><option value="">Select Brand...</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
                                 <div className="col-md-6"><label className="form-label small fw-bold">Category</label><select className={`form-select ${theme.input}`} required value={newProduct.category_id} onChange={handleCategoryChange}><option value="">Select Category...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                                 <div className="col-md-6"><label className="form-label small fw-bold">Sub-Category</label><select className={`form-select ${theme.input}`} value={newProduct.sub_category_id} onChange={e => setNewProduct({...newProduct, sub_category_id: e.target.value})}><option value="">None</option>{filteredSubs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
@@ -352,15 +376,36 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* MODAL: RESTOCK */}
+      {/* MODAL: RESTOCK (UPDATED WITH DATE) */}
       {showRestockModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-dialog-centered">
                 <div className={`modal-content ${theme.modalContent}`}>
                     <div className={`modal-header ${theme.modalHeader}`}><h5 className="modal-title">Restock</h5><button className="btn-close" onClick={() => setShowRestockModal(false)}></button></div>
                     <div className="modal-body p-4 text-center">
-                        <h5 className="fw-bold">{restockData.name}</h5>
-                        <input type="number" className={`form-control my-3 ${theme.input}`} placeholder="Qty Arrived" value={restockData.qty} onChange={e => setRestockData({...restockData, qty: e.target.value})} />
+                        <h5 className="fw-bold mb-3">{restockData.name}</h5>
+                        
+                        <div className="text-start mb-3">
+                            <label className="form-label small fw-bold">Received Date</label>
+                            <input 
+                                type="date" 
+                                className={`form-control ${theme.input}`} 
+                                value={restockData.received_date} 
+                                onChange={e => setRestockData({...restockData, received_date: e.target.value})} 
+                            />
+                        </div>
+
+                        <div className="text-start mb-4">
+                            <label className="form-label small fw-bold">Quantity Arrived</label>
+                            <input 
+                                type="number" 
+                                className={`form-control ${theme.input}`} 
+                                placeholder="Enter Quantity" 
+                                value={restockData.qty} 
+                                onChange={e => setRestockData({...restockData, qty: e.target.value})} 
+                            />
+                        </div>
+
                         <button className="btn btn-success w-100" onClick={submitRestock}>Confirm Restock</button>
                     </div>
                 </div>

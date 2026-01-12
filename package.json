@@ -1,6 +1,6 @@
 {
   "name": "golden-power",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "main": "main.js",
   "homepage": "./",
   "description": "Golden Power development process",
@@ -28,6 +28,7 @@
     "react-scripts": "5.0.1",
     "recharts": "^3.6.0",
     "sweetalert2": "^11.26.17",
+    "toastr": "^2.1.4",
     "web-vitals": "^2.1.4"
   },
   "devDependencies": {

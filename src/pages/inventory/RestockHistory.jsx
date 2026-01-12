@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
+// 🔥 FIX: Use '../../' to go up two levels to reach src/context and src/api
 import { GlobalContext } from '../../context/GlobalState';
 import apiClient from '../../api/client';
 import { useNavigate } from 'react-router-dom';
@@ -69,7 +70,7 @@ const RestockHistory = () => {
     );
 
     return (
-        <div className="container-fluid p-4" style={{ minHeight: '100vh', background: darkMode ? '#0f172a' : '#f8f9fa' }}>
+        <div className="container-fluid p-4" style={{ minHeight: '100vh', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa' }}>
             
             {/* PAGE HEADER WITH BACK BUTTON */}
             <div className="d-flex align-items-center mb-4">
@@ -167,7 +168,7 @@ const RestockHistory = () => {
                                             <table className={`table align-middle ${darkMode ? 'table-dark' : 'table-hover'}`}>
                                                 <thead>
                                                     <tr className={theme.subText}>
-                                                        <th className="py-3">Date & Time</th>
+                                                        <th className="py-3">Received Date</th>
                                                         <th>Quantity Added</th>
                                                     </tr>
                                                 </thead>
@@ -175,15 +176,16 @@ const RestockHistory = () => {
                                                     {historyLogs.map((log) => (
                                                         <tr key={log.id}>
                                                             <td className="fw-bold">
-                                                                {new Date(log.created_at).toLocaleDateString()} 
+                                                                {/* Uses received_date if available, else created_at */}
+                                                                {new Date(log.received_date || log.created_at).toLocaleDateString()} 
                                                                 <small className="d-block fw-normal text-muted">
-                                                                    {new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                                                    Logged: {new Date(log.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                                                 </small>
                                                             </td>
                                                             <td>
                                                                 <span className="badge bg-success bg-opacity-10 text-success border border-success px-3 py-2">
                                                                     <i className="bi bi-arrow-up-circle-fill me-2"></i>
-                                                                    +{log.quantity_added}
+                                                                    +{log.quantity}
                                                                 </span>
                                                             </td>
                                                         </tr>

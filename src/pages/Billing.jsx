@@ -84,7 +84,7 @@ const Billing = () => {
   const { customers, loadBilling, loadDebtors, loadReports, darkMode } = useContext(GlobalContext);
 
   const [products, setProducts] = useState([]); 
-  const [todaysBills, setTodaysBills] = useState([]); // 🔥 Server-side filtered list
+  const [todaysBills, setTodaysBills] = useState([]); 
   const [custId, setCustId] = useState('');
   
   const [scheduleService, setScheduleService] = useState(false);
@@ -119,14 +119,12 @@ const Billing = () => {
     } catch (err) { setProducts([]); }
   };
 
-  // 🔥 Fetch Today's Bills Only (Optimized)
-const fetchTodaysActivity = async () => {
+  const fetchTodaysActivity = async () => {
     try {
         const res = await apiClient.get('/billing/history?filter=today');
-
         setTodaysBills(res.data.data || []); 
     } catch (err) { console.error("History fetch error", err); }
-};
+  };
 
   useEffect(() => { 
       fetchProducts(); 
@@ -149,7 +147,6 @@ const fetchTodaysActivity = async () => {
   // --- 2. DYNAMIC OPTIONS ---
   const customerOptions = (customers || []).map(c => ({ value: c.id, label: c.name, subLabel: c.phone }));
   
-  // 🔥 Warning in Dropdown for Low Stock
   const productOptions = (products || []).map(p => {
       const isLow = p.stock_quantity <= (p.low_stock_limit || 5);
       return { 
@@ -250,6 +247,7 @@ const fetchTodaysActivity = async () => {
       } catch (err) { Swal.fire('Error', 'Image upload failed.', 'error'); }
   };
 
+  // 🔥 UPDATED HANDLER: Auto-Generates Notes from Bill
   const handleSubmit = async () => {
     if (cart.length === 0) return Swal.fire('Error', "Cart is empty!", 'warning');
     if (!custId) return Swal.fire('Error', "Select a customer.", 'warning');
@@ -257,18 +255,49 @@ const fetchTodaysActivity = async () => {
     
     setIsSubmitting(true);
     try {
+      // 1. CREATE BILL
       const billData = {
-        customer_id: custId, items: cart, paid_amount: parseFloat(paid) || 0, 
-        next_service_date: scheduleService ? serviceDate : null, service_type: scheduleService ? serviceType : null 
+        customer_id: custId, 
+        items: cart, 
+        paid_amount: parseFloat(paid) || 0
       };
 
-      await apiClient.post('/billing/create', billData);
+      const billRes = await apiClient.post('/billing/create', billData);
+      
+      // Access Invoice Number safely from response
+      // Handles both { id, invoice_no, ... } and { object: { id, invoice_no ... } }
+      const createdBill = billRes.data.object || billRes.data;
+      const invoiceRef = createdBill?.invoice_no ? `Invoice #${createdBill.invoice_no}` : "New Invoice";
+
+      // 2. CREATE SERVICE AUTOMATICALLY
+      if (scheduleService && serviceDate) {
+          
+          // 🔥 GENERATE DETAILED NOTES
+          const productList = cart.map(item => `${item.product_name} (x${item.quantity})`).join(', ');
+          const detailedNotes = `Linked to ${invoiceRef}. Items: ${productList}`;
+
+          const servicePayload = {
+              customer_id: custId,
+              employee_id: '', // Unassigned
+              service_date: serviceDate,
+              task_type: serviceType,
+              notes: detailedNotes // <--- Passes the invoice details here
+          };
+          
+          try {
+              await apiClient.post('/services/assign', servicePayload);
+          } catch (serviceErr) {
+              console.error("Service scheduling failed:", serviceErr);
+          }
+      }
+
+      // 3. REFRESH & RESET
       fetchTodaysActivity(); 
       fetchProducts();
       loadBilling(); loadDebtors(); loadReports(); 
       
       setCart([]); setPaid(''); setCustId(''); setScheduleService(false);
-      Swal.fire({ icon: 'success', title: 'Invoice Created!', timer: 1500, showConfirmButton: false });
+      Swal.fire({ icon: 'success', title: 'Invoice & Service Created!', timer: 1500, showConfirmButton: false });
     } catch (err) { 
       Swal.fire({ icon: 'error', title: 'Failed', text: err.response?.data?.detail || "Error" });
     } finally { setIsSubmitting(false); }
@@ -283,7 +312,7 @@ const fetchTodaysActivity = async () => {
     if(result.isConfirmed) {
         try {
             await apiClient.put(`/billing/${saleId}/status`);
-            fetchTodaysActivity(); // Update sidebar immediately
+            fetchTodaysActivity(); 
             Swal.fire('Updated', 'Bill status changed.', 'success');
         } catch (err) { Swal.fire('Error', 'Update failed', 'error'); }
     }
@@ -346,7 +375,6 @@ const fetchTodaysActivity = async () => {
                   <div className="col-md-2">
                       <label className="small fw-bold">Qty</label>
                       <div className="input-group">
-                          {/* 🔥 UPDATED: Using handlers */}
                           <button type="button" className="btn btn-outline-secondary px-2" onClick={decrementQty}>-</button>
                           <input type="number" className={`form-control text-center px-1 ${theme.input}`} value={qty} onChange={(e) => handleQtyChange(e.target.value)} />
                           <button type="button" className="btn btn-outline-secondary px-2" onClick={incrementQty}>+</button>
@@ -356,7 +384,6 @@ const fetchTodaysActivity = async () => {
                   {applyDiscount && (
                       <div className="col-md-2">
                           <label className="small fw-bold">Disc</label>
-                          {/* 🔥 UPDATED: Using handler */}
                           <input type="number" className={`form-control ${theme.input}`} value={discount} onChange={handleDiscountChange} />
                       </div>
                   )}
@@ -385,7 +412,6 @@ const fetchTodaysActivity = async () => {
                             <td>₹{item.unit_price}</td>
                             <td>{item.quantity}</td>
                             <td className="text-end fw-bold">₹{item.total}</td>
-                            {/* 🔥 UPDATED: Using handler */}
                             <td><button className="btn btn-sm text-danger" onClick={() => removeFromCart(idx)}><i className="bi bi-trash"></i></button></td>
                         </tr>
                     ))}

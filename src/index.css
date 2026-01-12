@@ -33,3 +33,27 @@ html {
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Professional Toastr Overrides */
+#toast-container > .toast {
+    background-image: none !important;
+    border-radius: 12px !important;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5) !important;
+    opacity: 1 !important;
+    padding: 15px 15px 15px 50px !important;
+    width: 350px !important;
+}
+
+/* Fix Z-Index so it appears on top of charts */
+#toast-container {
+    z-index: 999999 !important;
+}
+
+.toast-warning {
+    background-color: #f59e0b !important; /* Professional Amber */
+    color: #ffffff !important;
+}
+
+.toast-close-button {
+    color: #ffffff !important;
+}

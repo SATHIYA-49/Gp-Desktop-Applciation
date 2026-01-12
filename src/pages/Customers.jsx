@@ -3,6 +3,7 @@ import { GlobalContext } from '../context/GlobalState';
 import apiClient from '../api/client';
 import CustomerLedgerModal from '../components/CustomerLedgerModal';
 import { toast } from 'react-hot-toast'; 
+import Swal from 'sweetalert2'; // 🔥 IMPORT SWEETALERT
 
 // ==========================================
 // 1. SUB-COMPONENT: ADD/EDIT FORM MODAL
@@ -237,16 +238,54 @@ const Customers = () => {
       setShowModal(true);
   };
 
+  // 🔥 UPDATED: DELETE WITH SWEET ALERT 2
   const handleDelete = async (e, id) => {
     e.stopPropagation(); 
-    if(!window.confirm("Are you sure you want to delete this customer?")) return;
     
-    try {
-      await apiClient.delete(`/customers/${id}`);
-      loadCustomers();
-      toast.success("Customer deleted.");
-    } catch (err) {
-      alert("⚠️ " + (err.response?.data?.detail || "Delete failed."));
+    // Customizing SweetAlert to match Dark/Light mode
+    const swalColors = {
+        bg: darkMode ? '#1e293b' : '#fff',
+        text: darkMode ? '#fff' : '#545454'
+    };
+
+    const result = await Swal.fire({
+        title: 'Are you sure?',
+        text: "You won't be able to revert this!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Yes, delete it!',
+        background: swalColors.bg,
+        color: swalColors.text,
+        iconColor: '#dc3545'
+    });
+
+    if (result.isConfirmed) {
+        try {
+            await apiClient.delete(`/customers/${id}`);
+            loadCustomers();
+            
+            // Success Alert
+            Swal.fire({
+                title: 'Deleted!',
+                text: 'Customer has been removed.',
+                icon: 'success',
+                timer: 2000,
+                showConfirmButton: false,
+                background: swalColors.bg,
+                color: swalColors.text
+            });
+        } catch (err) {
+            // Error Alert
+            Swal.fire({
+                title: 'Error!',
+                text: err.response?.data?.detail || "Delete failed.",
+                icon: 'error',
+                background: swalColors.bg,
+                color: swalColors.text
+            });
+        }
     }
   };
 

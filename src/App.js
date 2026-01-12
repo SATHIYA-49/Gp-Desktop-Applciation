@@ -2,13 +2,14 @@ import React, { useContext } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { GlobalProvider, GlobalContext } from './context/GlobalState'; // Import Context
 import './App.css'; 
-
+import 'toastr/build/toastr.min.css';
 // COMPONENTS
 import Sidebar from './components/Sidebar';
 import ServiceNotifier from './components/ServiceNotifier';
 import LoadingScreen from './components/LoadingScreen';
 
 // PAGES
+import Security from './pages/Security'; // <--- ADD THIS
 import Dashboard from './pages/Dashboard'; 
 import Customers from './pages/Customers';
 import Billing from './pages/Billing';
@@ -53,6 +54,7 @@ const AppContent = () => {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             
             {/* Main Modules */}
+            <Route path="/security" element={<Security />} /> {/* <--- NEW ROUTE */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/billing" element={<Billing />} />
