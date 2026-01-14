@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useCallback, useRef } from 'rea
 import apiClient from '../api/client';
 import { GlobalContext } from '../context/GlobalState';
 import LowStockAlert from '../components/LowStockAlert'; 
+import ProductView from '../components/ProductView'; 
 import { useNavigate } from 'react-router-dom';
 
 // --- DEBOUNCE HOOK ---
@@ -22,8 +23,6 @@ const Inventory = () => {
   const [productsData, setProductsData] = useState([]); 
   const [pagination, setPagination] = useState({ current_page: 1, total_pages: 1, total_items: 0 });
   const [loading, setLoading] = useState(false);
-  
-  // 🔥 STOP THE LOOP: Use a Ref to track if we already tried loading
   const hasFetchedMasterData = useRef(false);
 
   // --- FILTERS ---
@@ -37,14 +36,17 @@ const Inventory = () => {
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [showMasterModal, setShowMasterModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, id: null, type: null, title: '' });
+  const [viewProduct, setViewProduct] = useState(null); 
 
   // --- FORM DATA ---
   const [newProduct, setNewProduct] = useState({
     name: '', brand_id: '', category_id: '', sub_category_id: '', 
     net_price: '', sell_price: '', warranty_details: '', 
     low_stock_limit: '', 
-    is_active: true
+    is_active: true,
+    specifications: { capacity: '', input_voltage: '', output_wave: '', application: '' }
   });
+
   const [filteredSubs, setFilteredSubs] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null); 
   const [restockData, setRestockData] = useState({ id: null, name: '', qty: '', received_date: '' });
@@ -65,15 +67,13 @@ const Inventory = () => {
     input: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-white text-dark border',
     table: darkMode ? 'table-dark' : '', 
     tableHeader: darkMode ? 'table-dark' : 'table-light',
-    tableRowText: darkMode ? 'text-white' : 'text-dark',
     modalContent: darkMode ? 'bg-dark text-white border border-secondary' : 'bg-white shadow-lg border-0',
     modalHeader: darkMode ? 'border-secondary bg-dark' : 'border-bottom bg-white',
     listGroupItem: darkMode ? 'bg-dark text-white border-secondary' : 'bg-white text-dark',
     btnGhost: darkMode ? 'btn-outline-light' : 'btn-outline-dark',
-    btnClose: darkMode ? 'btn-close-white' : ''
   };
 
-  // --- 1. FETCH PRODUCTS ---
+  // --- FETCH PRODUCTS ---
   const fetchProducts = useCallback(async (page = 1) => {
     setLoading(true); 
     try {
@@ -89,59 +89,55 @@ const Inventory = () => {
     }
   }, [activeTab, debouncedSearch]);
 
-  // =========================================================
-  // 🔥 FIX: THE BULLETPROOF LOADER (NO LOOP)
-  // =========================================================
+  // --- LOAD MASTER DATA (Fixed Dependency Warning) ---
   useEffect(() => {
     if (brands.length > 0) return;
     if (hasFetchedMasterData.current === true) return;
-
-    console.log("🚀 Initializing Inventory Master Data...");
     hasFetchedMasterData.current = true; 
     loadInventoryData();
-    // eslint-disable-next-line
-  }, []); 
+  }, [brands.length, loadInventoryData]); 
 
-  // Load products when search or tab changes
-  useEffect(() => {
-    fetchProducts(1);    
-  }, [fetchProducts]); 
+  useEffect(() => { fetchProducts(1); }, [fetchProducts]); 
+
+  // --- PAGINATION ---
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= pagination.total_pages) fetchProducts(newPage);
+  };
 
   const showAlert = (type, message) => {
     setAlertInfo({ show: true, type, message });
     setTimeout(() => setAlertInfo({ show: false, type: '', message: '' }), 2500);
   };
 
-  const getBrandName = (id) => brands.find(b => b.id === id)?.name || 'Unknown';
-  const getCatName = (id) => categories.find(c => c.id === id)?.name || 'Unknown';
-  const getSubName = (id) => subCategories.find(s => s.id === id)?.name || '-';
-
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.total_pages) fetchProducts(newPage);
-  };
-
-  const toggleActiveStatus = async (product) => {
-      try {
-          const newStatus = !product.is_active;
-          setProductsData(prev => prev.map(p => p.id === product.id ? { ...p, is_active: newStatus } : p));
-          await apiClient.patch(`/inventory/products/${product.id}/status`, { is_active: newStatus });
-          showAlert('success', `Status updated!`);
-      } catch (err) {
-          fetchProducts(pagination.current_page);
-          showAlert('danger', "Failed to update status");
-      }
+  // --- SPECS HANDLER ---
+  const handleSpecChange = (e) => {
+      const { name, value } = e.target;
+      setNewProduct(prev => ({
+          ...prev,
+          specifications: {
+              ...prev.specifications,
+              [name]: value
+          }
+      }));
   };
 
   // --- FORM HANDLERS ---
   const openCreateModal = () => {
       setEditingProduct(null);
-      setNewProduct({ name: '', brand_id: '', category_id: '', sub_category_id: '', net_price: '', sell_price: '', warranty_details: '', low_stock_limit: '', is_active: true });
+      setNewProduct({ 
+          name: '', brand_id: '', category_id: '', sub_category_id: '', 
+          net_price: '', sell_price: '', warranty_details: '', low_stock_limit: '', 
+          is_active: true,
+          specifications: { capacity: '', input_voltage: '', output_wave: '', application: '' }
+      });
       setFilteredSubs([]);
       setShowAddModal(true);
   };
 
   const openEditModal = (product) => {
       setEditingProduct(product);
+      const specs = product.specifications || {};
+      
       setNewProduct({
           name: product.name, 
           brand_id: product.brand_id, 
@@ -151,7 +147,13 @@ const Inventory = () => {
           sell_price: product.sell_price || '',
           warranty_details: product.warranty_details || '', 
           low_stock_limit: product.low_stock_limit || '',
-          is_active: product.is_active ?? true
+          is_active: product.is_active ?? true,
+          specifications: {
+              capacity: specs.capacity || '',
+              input_voltage: specs.input_voltage || '',
+              output_wave: specs.output_wave || '',
+              application: specs.application || ''
+          }
       });
       setFilteredSubs(subCategories.filter(s => String(s.category_id) === String(product.category_id)));
       setShowAddModal(true);
@@ -168,17 +170,22 @@ const Inventory = () => {
     if(!newProduct.name || !newProduct.brand_id || !newProduct.category_id || !newProduct.net_price || !newProduct.low_stock_limit) 
         return showAlert('warning', "Please fill required fields.");
     
+    // 🔥 VALIDATION: Check Mandatory Spec Fields
+    if (!newProduct.specifications.capacity || !newProduct.specifications.input_voltage) {
+        return showAlert('warning', "Technical Specs: Capacity and Voltage are required!");
+    }
+
     try {
       const payload = { 
         ...newProduct, 
-        sku: null,
+        sku: editingProduct ? null : null, 
         brand_id: String(newProduct.brand_id), 
         category_id: String(newProduct.category_id),
         sub_category_id: newProduct.sub_category_id ? String(newProduct.sub_category_id) : null,
         net_price: parseFloat(newProduct.net_price), 
         sell_price: parseFloat(newProduct.sell_price),
         low_stock_limit: parseInt(newProduct.low_stock_limit),
-        specifications: editingProduct ? editingProduct.specifications : {}
+        specifications: newProduct.specifications // Always send specs
       };
 
       if (editingProduct) { 
@@ -192,13 +199,12 @@ const Inventory = () => {
     } catch (err) { showAlert('danger', err.response?.data?.detail || "Failed to save product"); }
   };
 
-  const openRestockModal = (product) => {
-      const today = new Date().toISOString().split('T')[0];
-      setRestockData({ id: product.id, name: product.name, qty: '', received_date: today });
-      setShowRestockModal(true);
+  // --- RESTOCK LOGIC ---
+  const openRestockModal = (p) => { 
+      setRestockData({ id: p.id, name: p.name, qty: '', received_date: new Date().toISOString().split('T')[0] }); 
+      setShowRestockModal(true); 
   };
-
-  const submitRestock = async () => {
+  const submitRestock = async () => { 
     const qty = parseInt(restockData.qty);
     if (!qty || qty <= 0) return showAlert('warning', "Enter valid qty");
     try {
@@ -218,7 +224,7 @@ const Inventory = () => {
     }
   }, [masterTab, selectedParentCat, brands, categories, subCategories]);
 
-  const handleMasterSubmit = async () => {
+  const handleMasterSubmit = async () => { 
     if (!masterInput.trim()) return;
     try {
       const endpoint = masterTab === 'brand' ? 'brands' : masterTab === 'category' ? 'categories' : 'sub-categories';
@@ -235,8 +241,8 @@ const Inventory = () => {
   };
 
   const promptDelete = (id, type, name) => setConfirmModal({ show: true, id, type, title: name });
-
-  const executeDelete = async () => {
+  
+  const executeDelete = async () => { 
       const { id, type } = confirmModal;
       setConfirmModal({ show: false, id: null, type: null, title: '' });
       try {
@@ -248,31 +254,30 @@ const Inventory = () => {
       } catch (err) { showAlert('danger', "Delete failed."); }
   };
 
+  const getBrandName = (id) => brands.find(b => b.id === id)?.name || 'Unknown';
+  const getCatName = (id) => categories.find(c => c.id === id)?.name || 'Unknown';
+  const getSubName = (id) => subCategories.find(s => s.id === id)?.name || '-';
+  
+  const toggleActiveStatus = async (product) => { 
+      try {
+          const newStatus = !product.is_active;
+          setProductsData(prev => prev.map(p => p.id === product.id ? { ...p, is_active: newStatus } : p));
+          await apiClient.patch(`/inventory/products/${product.id}/status`, { is_active: newStatus });
+          showAlert('success', `Status updated!`);
+      } catch (err) {
+          fetchProducts(pagination.current_page);
+          showAlert('danger', "Failed to update status");
+      }
+  };
+
   return (
     <div className={`container-fluid p-4 ${theme.text}`} style={{ minHeight: '100vh', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa', position: 'relative' }}>
       
-      <button 
-        className="btn btn-outline-primary" 
-        onClick={() => navigate('/inventory/history')}
-      >
-        <i className="bi bi-clock-history me-2"></i> View Restock History
-      </button>
-
-      {/* ALERTS & WIDGETS */}
-      {alertInfo.show && (
-        <div className="shadow-lg rounded animate__animated animate__slideInDown" style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 10000, backgroundColor: darkMode ? '#2c3034' : '#fff', borderLeft: `5px solid ${alertInfo.type === 'success' ? '#198754' : '#dc3545'}`, padding: '12px 20px', display: 'flex', alignItems: 'center' }}>
-            <i className={`bi ${alertInfo.type === 'success' ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-warning'} fs-5 me-3`}></i><span className="fw-bold">{alertInfo.message}</span>
-        </div>
-      )}
-      <div style={{ position: 'absolute', top: '90px', right: '20px', zIndex: 1050, maxWidth: '350px', width: '100%' }}>
-          <LowStockAlert onRestockClick={openRestockModal} />
-      </div>
-
       {/* HEADER */}
       <div className="d-flex justify-content-between align-items-center mb-4">
-        <div><h3 className="fw-bold m-0">Inventory</h3><p className={`small m-0 ${theme.subText}`}>Manage your products and stock.</p></div>
+        <div><h3 className="fw-bold m-0">Inventory</h3><p className={`small m-0 ${theme.subText}`}>Manage your products.</p></div>
         <div className="d-flex gap-2">
-            <button className={`btn ${theme.btnGhost} fw-bold`} onClick={() => setShowMasterModal(true)}><i className="bi bi-tags me-2"></i> Brands/Category</button>
+            <button className={`btn ${theme.btnGhost} fw-bold`} onClick={() => setShowMasterModal(true)}><i className="bi bi-tags me-2"></i>Brands / Categories</button>
             <button className="btn btn-primary fw-bold shadow-sm" onClick={openCreateModal}><i className="bi bi-plus-lg me-2"></i> New Product</button>
         </div>
       </div>
@@ -288,14 +293,29 @@ const Inventory = () => {
             <input type="text" className={`form-control rounded-pill ps-5 ${theme.input} shadow-sm`} placeholder="Search products..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
       </div>
+      
+      {/* HISTORY BUTTON */}
+      <div className="mb-3 d-flex justify-content-end">
+        <button className="btn btn-sm btn-outline-primary" onClick={() => navigate('/inventory/history')}>
+            <i className="bi bi-clock-history me-2"></i> View Restock History
+        </button>
+      </div>
 
-      {/* TABLE / LOADING AREA */}
+      {/* ALERTS */}
+      {alertInfo.show && (
+        <div className="shadow-lg rounded animate__animated animate__slideInDown" style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 10000, backgroundColor: darkMode ? '#2c3034' : '#fff', borderLeft: `5px solid ${alertInfo.type === 'success' ? '#198754' : '#dc3545'}`, padding: '12px 20px', display: 'flex', alignItems: 'center' }}>
+            <i className={`bi ${alertInfo.type === 'success' ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-warning'} fs-5 me-3`}></i><span className="fw-bold">{alertInfo.message}</span>
+        </div>
+      )}
+      <div style={{ position: 'absolute', top: '90px', right: '20px', zIndex: 1050, maxWidth: '350px', width: '100%' }}>
+          <LowStockAlert onRestockClick={openRestockModal} />
+      </div>
+
+      {/* TABLE */}
       <div className={`card overflow-hidden ${theme.card}`} style={{ minHeight: '400px' }}>
         {loading ? (
            <div className="d-flex flex-column justify-content-center align-items-center h-100 py-5">
-             <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }} role="status">
-                <span className="visually-hidden">Loading...</span>
-             </div>
+             <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }} role="status"><span className="visually-hidden">Loading...</span></div>
              <p className={`mt-3 fw-bold ${theme.subText} animate__animated animate__pulse animate__infinite`}>Loading Inventory Data...</p>
            </div>
         ) : (
@@ -314,31 +334,25 @@ const Inventory = () => {
                                 <td>{getBrandName(p.brand_id)}</td>
                                 <td>{getCatName(p.category_id)}</td>
                                 <td>{getSubName(p.sub_category_id)}</td>
-                                <td>
-                                <div className="form-check form-switch">
-                                    <input className="form-check-input" type="checkbox" checked={p.is_active ?? true} onChange={() => toggleActiveStatus(p)} />
-                                </div>
-                                </td>
+                                <td><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={p.is_active ?? true} onChange={() => toggleActiveStatus(p)} /></div></td>
                                 <td>
                                     <span className={`badge rounded-pill px-3 py-2 ${p.stock_quantity <= p.low_stock_limit ? 'bg-danger animate__animated animate__flash animate__infinite' : 'bg-success-subtle text-success'}`}>
                                         {p.stock_quantity} Units
                                     </span>
-                                    {p.stock_quantity <= p.low_stock_limit && (
-                                    <div className="text-danger x-small fw-bold mt-1">Reorder Now</div>
-                                    )}
+                                    {p.stock_quantity <= p.low_stock_limit && <div className="text-danger x-small fw-bold mt-1">Reorder Now</div>}
                                 </td>
                                 <td className="fw-bold">₹{p.sell_price}</td>
                                 <td className="text-end pe-4">
-                                    <button className="btn btn-sm btn-outline-warning me-2" onClick={() => openRestockModal(p)}><i className="bi bi-box-arrow-in-down"></i></button>
-                                    <button className="btn btn-sm btn-outline-info me-2" onClick={() => openEditModal(p)}><i className="bi bi-pencil-square"></i></button>
-                                    <button className="btn btn-sm btn-outline-danger" onClick={() => promptDelete(p.id, 'product', p.name)}><i className="bi bi-trash"></i></button>
+                                    <button className="btn btn-sm btn-outline-primary me-2" onClick={() => setViewProduct(p)} title="View Details"><i className="bi bi-eye"></i></button>
+                                    <button className="btn btn-sm btn-outline-warning me-2" onClick={() => openRestockModal(p)} title="Restock"><i className="bi bi-box-arrow-in-down"></i></button>
+                                    <button className="btn btn-sm btn-outline-info me-2" onClick={() => openEditModal(p)} title="Edit"><i className="bi bi-pencil-square"></i></button>
+                                    <button className="btn btn-sm btn-outline-danger" onClick={() => promptDelete(p.id, 'product', p.name)} title="Delete"><i className="bi bi-trash"></i></button>
                                 </td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
             </div>
-            
             <div className="card-footer d-flex justify-content-between align-items-center py-3">
               <small className={theme.subText}>Page {pagination.current_page} of {pagination.total_pages}</small>
               <div className="btn-group">
@@ -350,7 +364,7 @@ const Inventory = () => {
         )}
       </div>
 
-      {/* MODAL: ADD/EDIT */}
+      {/* MODAL: ADD/EDIT PRODUCT */}
       {showAddModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-lg modal-dialog-centered">
@@ -359,16 +373,39 @@ const Inventory = () => {
                     <div className="modal-body p-4">
                         <form onSubmit={submitProduct}>
                             <div className="row g-3">
-                                <div className="col-12"><label className="form-label small fw-bold">Name</label><input type="text" className={`form-control ${theme.input}`} required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} /></div>
-                                <div className="col-md-6"><label className="form-label small fw-bold">Brand</label><select className={`form-select ${theme.input}`} required value={newProduct.brand_id} onChange={e => setNewProduct({...newProduct, brand_id: e.target.value})}><option value="">Select Brand...</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-                                <div className="col-md-6"><label className="form-label small fw-bold">Category</label><select className={`form-select ${theme.input}`} required value={newProduct.category_id} onChange={handleCategoryChange}><option value="">Select Category...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                                {/* BASIC DETAILS */}
+                                <div className="col-12"><label className="form-label small fw-bold">Name <span className="text-danger">*</span></label><input type="text" className={`form-control ${theme.input}`} required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} /></div>
+                                <div className="col-md-6"><label className="form-label small fw-bold">Brand <span className="text-danger">*</span></label><select className={`form-select ${theme.input}`} required value={newProduct.brand_id} onChange={e => setNewProduct({...newProduct, brand_id: e.target.value})}><option value="">Select Brand...</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+                                <div className="col-md-6"><label className="form-label small fw-bold">Category <span className="text-danger">*</span></label><select className={`form-select ${theme.input}`} required value={newProduct.category_id} onChange={handleCategoryChange}><option value="">Select Category...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                                 <div className="col-md-6"><label className="form-label small fw-bold">Sub-Category</label><select className={`form-select ${theme.input}`} value={newProduct.sub_category_id} onChange={e => setNewProduct({...newProduct, sub_category_id: e.target.value})}><option value="">None</option>{filteredSubs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-                                <div className="col-md-6"><label className="form-label small fw-bold text-warning">Low Stock Limit</label><input type="number" className={`form-control ${theme.input} border-warning`} required placeholder="e.g. 5" value={newProduct.low_stock_limit} onChange={e => setNewProduct({...newProduct, low_stock_limit: e.target.value})} /></div>
-                                <div className="col-md-6"><label className="form-label small fw-bold">Buy Price</label><input type="number" step="0.01" className={`form-control ${theme.input}`} required value={newProduct.net_price} onChange={e => setNewProduct({...newProduct, net_price: e.target.value})} /></div>
-                                <div className="col-md-6"><label className="form-label small fw-bold">Sell Price</label><input type="number" step="0.01" className={`form-control ${theme.input}`} required value={newProduct.sell_price} onChange={e => setNewProduct({...newProduct, sell_price: e.target.value})} /></div>
-                                <div className="col-12 mt-3"><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={newProduct.is_active} onChange={e => setNewProduct({...newProduct, is_active: e.target.checked})} /><label className="form-check-label fw-bold ms-2">Active</label></div></div>
+                                <div className="col-md-6"><label className="form-label small fw-bold">Buy Price <span className="text-danger">*</span></label><input type="number" step="0.01" className={`form-control ${theme.input}`} required value={newProduct.net_price} onChange={e => setNewProduct({...newProduct, net_price: e.target.value})} /></div>
+                                <div className="col-md-6"><label className="form-label small fw-bold">Sell Price <span className="text-danger">*</span></label><input type="number" step="0.01" className={`form-control ${theme.input}`} required value={newProduct.sell_price} onChange={e => setNewProduct({...newProduct, sell_price: e.target.value})} /></div>
+                                <div className="col-md-6">
+                                    <label className="form-label small fw-bold">Capacity (e.g. 900 VA) <span className="text-danger">*</span></label>
+                                    <input type="text" name="capacity" className={`form-control ${theme.input}`} required placeholder="Required" value={newProduct.specifications.capacity} onChange={handleSpecChange} />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label small fw-bold">Input Voltage (e.g. 12 V) <span className="text-danger">*</span></label>
+                                    <input type="text" name="input_voltage" className={`form-control ${theme.input}`} required placeholder="Required" value={newProduct.specifications.input_voltage} onChange={handleSpecChange} />
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label small fw-bold">Output Wave <span className="text-muted fw-normal">(Optional)</span></label>
+                                    <select name="output_wave" className={`form-select ${theme.input}`} value={newProduct.specifications.output_wave} onChange={handleSpecChange}>
+                                        <option value="">Select Wave Type...</option>
+                                        <option value="Sine Wave">Sine Wave</option>
+                                        <option value="Square Wave">Square Wave</option>
+                                        <option value="Modified Sine Wave">Modified Sine Wave</option>
+                                    </select>
+                                </div>
+                                <div className="col-md-6">
+                                    <label className="form-label small fw-bold">Application <span className="text-muted fw-normal">(Optional)</span></label>
+                                    <input type="text" name="application" className={`form-control ${theme.input}`} placeholder="e.g. Home, Office" value={newProduct.specifications.application} onChange={handleSpecChange} />
+                                </div>
+
+                                <div className="col-md-6"><label className="form-label small fw-bold text-warning">Low Stock Limit <span className="text-danger">*</span></label><input type="number" className={`form-control ${theme.input} border-warning`} required placeholder="e.g. 5" value={newProduct.low_stock_limit} onChange={e => setNewProduct({...newProduct, low_stock_limit: e.target.value})} /></div>
+                                <div className="col-12 mt-3"><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={newProduct.is_active} onChange={e => setNewProduct({...newProduct, is_active: e.target.checked})} /><label className="form-check-label fw-bold ms-2">Active Product</label></div></div>
                             </div>
-                            <button type="submit" className="btn btn-primary w-100 mt-4 py-2 fw-bold shadow-sm">{editingProduct ? 'Update Inventory' : 'Create Product'}</button>
+                            <button type="submit" className="btn btn-primary w-100 mt-4 py-2 fw-bold shadow-sm">{editingProduct ? 'Update Product' : 'Create Product'}</button>
                         </form>
                     </div>
                 </div>
@@ -376,36 +413,16 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* MODAL: RESTOCK (UPDATED WITH DATE) */}
+      {/* MODAL: RESTOCK */}
       {showRestockModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-dialog-centered">
                 <div className={`modal-content ${theme.modalContent}`}>
                     <div className={`modal-header ${theme.modalHeader}`}><h5 className="modal-title">Restock</h5><button className="btn-close" onClick={() => setShowRestockModal(false)}></button></div>
                     <div className="modal-body p-4 text-center">
-                        <h5 className="fw-bold mb-3">{restockData.name}</h5>
-                        
-                        <div className="text-start mb-3">
-                            <label className="form-label small fw-bold">Received Date</label>
-                            <input 
-                                type="date" 
-                                className={`form-control ${theme.input}`} 
-                                value={restockData.received_date} 
-                                onChange={e => setRestockData({...restockData, received_date: e.target.value})} 
-                            />
-                        </div>
-
-                        <div className="text-start mb-4">
-                            <label className="form-label small fw-bold">Quantity Arrived</label>
-                            <input 
-                                type="number" 
-                                className={`form-control ${theme.input}`} 
-                                placeholder="Enter Quantity" 
-                                value={restockData.qty} 
-                                onChange={e => setRestockData({...restockData, qty: e.target.value})} 
-                            />
-                        </div>
-
+                        <h5 className="fw-bold">{restockData.name}</h5>
+                        <div className="text-start mb-3"><label className="form-label small fw-bold">Received Date</label><input type="date" className={`form-control ${theme.input}`} value={restockData.received_date} onChange={e => setRestockData({...restockData, received_date: e.target.value})} /></div>
+                        <div className="text-start mb-4"><label className="form-label small fw-bold">Quantity Arrived</label><input type="number" className={`form-control ${theme.input}`} placeholder="Enter Quantity" value={restockData.qty} onChange={e => setRestockData({...restockData, qty: e.target.value})} /></div>
                         <button className="btn btn-success w-100" onClick={submitRestock}>Confirm Restock</button>
                     </div>
                 </div>
@@ -464,6 +481,8 @@ const Inventory = () => {
         </div>
       )}
 
+      {/* VIEW MODAL */}
+      <ProductView show={!!viewProduct} product={viewProduct} onClose={() => setViewProduct(null)} theme={theme} darkMode={darkMode} />
     </div>
   );
 };
