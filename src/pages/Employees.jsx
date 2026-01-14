@@ -2,11 +2,23 @@ import React, { useState, useEffect, useContext } from 'react';
 import { GlobalContext } from '../context/GlobalState';
 import apiClient from '../api/client';
 import Swal from 'sweetalert2';
-// ✅ RESTORED: Import the component
 import TechnicianServiceDetails from '../components/TechnicianServiceDetails';
 
+// --- 1. TOAST CONFIGURATION ---
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer)
+    toast.addEventListener('mouseleave', Swal.resumeTimer)
+  }
+});
+
 // ==========================================
-// 1. SUB-COMPONENT: EMPLOYEE FORM MODAL
+// 2. SUB-COMPONENT: EMPLOYEE FORM MODAL
 // ==========================================
 const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) => {
   const [formData, setFormData] = useState({ 
@@ -16,7 +28,7 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
     is_active: true 
   });
   const [loading, setLoading] = useState(false);
-  const [checkingPhone, setCheckingPhone] = useState(false);
+  const [phoneStatus, setPhoneStatus] = useState({ checking: false, error: null });
 
   useEffect(() => {
     if (employee) {
@@ -31,18 +43,22 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
     }
   }, [employee]);
 
+  // Live Phone Check
   const checkPhoneExistence = async (phone) => {
       if (employee && employee.phone === phone) return;
-      setCheckingPhone(true);
+      
+      setPhoneStatus({ checking: true, error: null });
       try {
           const res = await apiClient.get(`/employees/check-phone?phone=${phone}`);
           if (res.data.exists) {
-              Swal.fire({
-                  icon: 'warning', title: 'Duplicate Phone', text: `Registered to ${res.data.employee_name}.`,
-                  background: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#545454'
-              });
+              setPhoneStatus({ checking: false, error: `Registered to: ${res.data.employee_name}` });
+          } else {
+              setPhoneStatus({ checking: false, error: null });
           }
-      } catch (err) { console.error(err); } finally { setCheckingPhone(false); }
+      } catch (err) { 
+          console.error(err);
+          setPhoneStatus({ checking: false, error: null }); 
+      }
   };
 
   const handlePhoneChange = (e) => {
@@ -50,33 +66,58 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
       if (val.length <= 10) {
           setFormData({...formData, phone: val});
           if (val.length === 10) checkPhoneExistence(val);
+          else setPhoneStatus({ checking: false, error: null });
       }
   };
 
+  // 🔥 UPDATED SUBMIT HANDLER
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Client Validation
     if (formData.phone.length !== 10) return Swal.fire({ icon: 'warning', title: 'Invalid Phone', text: 'Must be 10 digits.' });
+    if (phoneStatus.error) return Swal.fire({ icon: 'warning', title: 'Duplicate Phone', text: phoneStatus.error });
+    if (!formData.name.trim()) return Swal.fire({ icon: 'warning', title: 'Missing Name', text: 'Name is required.' });
 
     setLoading(true);
     try {
       if (employee) {
         await apiClient.put(`/employees/${employee.id}`, formData);
-        Swal.fire({ icon: 'success', title: 'Updated!', background: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#545454' });
+        Toast.fire({ icon: 'success', title: 'Employee Updated' });
       } else {
         await apiClient.post('/employees', formData);
-        Swal.fire({ icon: 'success', title: 'Success!', background: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#545454' });
+        Toast.fire({ icon: 'success', title: 'Employee Added' });
       }
       onSuccess();
       onClose();
-    } catch (err) { Swal.fire({ icon: 'error', title: 'Error', text: "Operation failed" }); } finally { setLoading(false); }
+    } catch (err) {
+        console.error("Submit Error:", err);
+        const errorDetail = err.response?.data?.detail;
+        let displayMsg = "Operation failed.";
+
+        // Handle Pydantic Array Errors vs String Errors
+        if (Array.isArray(errorDetail)) {
+            displayMsg = errorDetail.map(e => `• ${e.msg}`).join('<br>');
+        } else if (typeof errorDetail === 'string') {
+            displayMsg = errorDetail;
+        }
+
+        Swal.fire({ 
+            icon: 'error', 
+            title: 'Validation Error', 
+            html: `<div class="text-start text-danger fw-bold">${displayMsg}</div>` 
+        });
+    } finally { 
+        setLoading(false); 
+    }
   };
 
   return (
     <>
-      <div className="modal-backdrop fade show" style={{ zIndex: 1050 }}></div>
+      <div className="modal-backdrop fade show" style={{ zIndex: 1050, backdropFilter: 'blur(2px)' }}></div>
       <div className="modal fade show d-block" style={{ zIndex: 1060 }} tabIndex="-1">
         <div className="modal-dialog modal-dialog-centered">
-          <div className={`modal-content ${theme.modalContent} border-0 shadow-lg`}>
+          <div className={`modal-content ${theme.modalContent} border-0 shadow-lg rounded-4`}>
             <div className={`modal-header ${theme.modalHeader}`}>
               <h5 className={`modal-title fw-bold ${theme.text}`}>{employee ? 'Edit Employee' : 'Add New Staff'}</h5>
               <button type="button" className={`btn-close ${theme.closeBtn}`} onClick={onClose}></button>
@@ -84,16 +125,25 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
             <div className={`modal-body p-4 ${theme.card}`}>
               <form onSubmit={handleSubmit}>
                 <div className="mb-3">
-                  <label className={`small fw-bold mb-1 ${theme.subText}`}>Name</label>
+                  <label className={`small fw-bold mb-1 ${theme.subText}`}>Name <span className="text-danger">*</span></label>
                   <input className={`form-control py-2 ${theme.input}`} value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} placeholder="e.g. Ramesh Kumar" required />
                 </div>
                 <div className="mb-4 position-relative">
-                  <label className={`small fw-bold mb-1 ${theme.subText}`}>Phone</label>
+                  <label className={`small fw-bold mb-1 ${theme.subText}`}>Phone <span className="text-danger">*</span></label>
                   <div className="input-group">
-                      <span className={`input-group-text ${theme.input}`}>+91</span>
-                      <input type="text" inputMode="numeric" className={`form-control py-2 ${theme.input}`} value={formData.phone} onChange={handlePhoneChange} placeholder="9876543210" required />
+                      <span className={`input-group-text ${theme.inputIcon}`}>+91</span>
+                      <input 
+                        type="text" 
+                        inputMode="numeric" 
+                        className={`form-control py-2 ${theme.input} ${phoneStatus.error ? 'is-invalid border-danger' : ''}`} 
+                        value={formData.phone} 
+                        onChange={handlePhoneChange} 
+                        placeholder="9876543210" 
+                        required 
+                      />
                   </div>
-                  {checkingPhone && <div className="text-info small mt-1">Checking availability...</div>}
+                  {phoneStatus.checking && <div className="text-info small mt-1"><span className="spinner-border spinner-border-sm me-1"></span>Checking availability...</div>}
+                  {phoneStatus.error && <div className="text-danger small fw-bold mt-1"><i className="bi bi-exclamation-circle me-1"></i>{phoneStatus.error}</div>}
                 </div>
                 
                 {/* STATUS TOGGLE */}
@@ -101,7 +151,7 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
                   <div className="d-flex justify-content-between align-items-center">
                     <div>
                       <label className={`fw-bold mb-0 ${theme.text}`}>Employee Status</label>
-                      <div className={`small mt-1 ${formData.is_active ? 'text-success' : 'text-secondary'}`}>
+                      <div className={`small mt-1 ${formData.is_active ? 'text-success' : 'text-danger'}`}>
                         {formData.is_active ? '● Active (Can login & work)' : '● Inactive (Access suspended)'}
                       </div>
                     </div>
@@ -111,7 +161,7 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
                   </div>
                 </div>
 
-                <button disabled={loading || checkingPhone} className="btn btn-primary w-100 fw-bold py-2 rounded-pill shadow-sm">
+                <button disabled={loading || phoneStatus.checking || phoneStatus.error} className="btn btn-primary w-100 fw-bold py-2 rounded-pill shadow-sm">
                   {loading ? 'Saving...' : 'Save Employee'}
                 </button>
               </form>
@@ -124,7 +174,7 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
 };
 
 // ==========================================
-// 2. MAIN COMPONENT: EMPLOYEES PAGE
+// 3. MAIN COMPONENT: EMPLOYEES PAGE
 // ==========================================
 const Employees = () => {
   const { darkMode } = useContext(GlobalContext);
@@ -132,8 +182,6 @@ const Employees = () => {
   const [employees, setEmployees] = useState([]);
   const [allServices, setAllServices] = useState([]); 
   const [searchTerm, setSearchTerm] = useState('');
-  
-  // Filter State ('active' or 'inactive')
   const [statusFilter, setStatusFilter] = useState('active'); 
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -142,7 +190,6 @@ const Employees = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   
-  // ✅ RESTORED: Details Modal State
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedTechName, setSelectedTechName] = useState('');
   const [selectedTechTasks, setSelectedTechTasks] = useState([]);
@@ -153,19 +200,20 @@ const Employees = () => {
     subText: darkMode ? 'text-white-50' : 'text-muted',
     card: darkMode ? 'bg-dark border-secondary text-white' : 'bg-white border-0 shadow-sm text-dark',
     input: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-white border-0 shadow-sm text-dark',
+    inputIcon: darkMode ? 'bg-dark border-secondary text-white' : 'bg-light border-0 text-muted',
     tableHeader: darkMode ? 'table-dark' : 'table-light',
     modalContent: darkMode ? 'bg-dark text-white' : 'bg-white',
     modalHeader: darkMode ? 'border-secondary' : 'border-bottom',
-    cardHeader: darkMode ? 'border-secondary' : 'border-light',
-    btnClose: darkMode ? 'btn-close-white' : '',
     closeBtn: darkMode ? 'btn-close-white' : ''
   };
 
   const loadData = async () => {
     try {
-      const empRes = await apiClient.get('/employees');
-      setEmployees(empRes.data);
-      const srvRes = await apiClient.get('/services/');
+      const empRes = await apiClient.get('/employees/');
+      setEmployees(empRes.data || []);
+      
+      // Fetch Services for stats
+      const srvRes = await apiClient.get('/services/'); // Ensure this endpoint exists and returns array
       setAllServices(Array.isArray(srvRes.data) ? srvRes.data : []);
     } catch (err) { console.error(err); }
   };
@@ -180,18 +228,20 @@ const Employees = () => {
     const result = await Swal.fire({
       title: 'Are you sure?', text: "You won't be able to revert this!", icon: 'warning',
       showCancelButton: true, confirmButtonColor: '#d33', cancelButtonColor: '#3085d6', confirmButtonText: 'Yes, delete it!',
-      background: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#545454'
     });
+    
     if (result.isConfirmed) {
       try {
         await apiClient.delete(`/employees/${id}`);
         loadData();
-        Swal.fire({ title: 'Deleted!', icon: 'success', background: darkMode ? '#1e293b' : '#fff', color: darkMode ? '#fff' : '#545454' });
-      } catch (err) { Swal.fire({ icon: 'error', title: 'Error', text: "Delete failed" }); }
+        Toast.fire({ icon: 'success', title: 'Employee Deleted' });
+      } catch (err) { 
+        const errorDetail = err.response?.data?.detail;
+        Swal.fire({ icon: 'error', title: 'Error', text: errorDetail || "Delete failed" }); 
+      }
     }
   };
 
-  // ✅ RESTORED: Row Click Handler to Open Modal
   const handleRowClick = (employee) => {
       const techTasks = allServices.filter(t => t.assigned_employee_id === employee.id);
       setSelectedTechName(employee.name);
@@ -205,9 +255,7 @@ const Employees = () => {
       return { total: tasks.length, completed };
   };
 
-  // ==========================================
-  // 🔥 CATEGORIZED FILTER & SORT
-  // ==========================================
+  // FILTER & SORT
   const filteredEmployees = employees
       .filter(e => {
           const term = searchTerm.toLowerCase() || '';
@@ -230,7 +278,6 @@ const Employees = () => {
       
       {showModal && <EmployeeFormModal employee={editingEmployee} onClose={() => setShowModal(false)} onSuccess={loadData} theme={theme} darkMode={darkMode} />}
       
-      {/* ✅ RESTORED: Technician Details Modal */}
       <TechnicianServiceDetails 
         show={showDetailsModal} 
         onClose={() => setShowDetailsModal(false)} 
@@ -301,7 +348,6 @@ const Employees = () => {
                     const isActive = e.is_active !== false; 
                     
                     return (
-                        // ✅ RESTORED: onClick handler to open details
                         <tr key={e.id} className={theme.text} style={{cursor: 'pointer', opacity: isActive ? 1 : 0.7}} onClick={() => handleRowClick(e)} title="Click to view history">
                             <td className="ps-4 fw-bold">
                                 <div className="d-flex align-items-center">
@@ -357,7 +403,7 @@ const Employees = () => {
                 </nav>
             </div>
         )}
-        </div>
+      </div>
     </div>
   );
 };

@@ -4,7 +4,7 @@ import apiClient from '../api/client';
 import Swal from 'sweetalert2'; 
 
 // ==========================================
-// 1. REUSABLE SEARCHABLE SELECT COMPONENT
+// 1. REUSABLE SEARCHABLE SELECT (No Changes)
 // ==========================================
 const SearchableSelect = ({ options, value, onChange, placeholder, label, theme, darkMode }) => {
     const [isOpen, setIsOpen] = useState(false);
@@ -85,11 +85,12 @@ const Billing = () => {
 
   const [products, setProducts] = useState([]); 
   const [todaysBills, setTodaysBills] = useState([]); 
-  const [custId, setCustId] = useState('');
   
-  const [scheduleService, setScheduleService] = useState(false);
-  const [serviceDate, setServiceDate] = useState('');
-  const [serviceType, setServiceType] = useState('Installation');
+  // --- CUSTOMER SELECTION STATES ---
+  const [billingMode, setBillingMode] = useState('registered'); // 'registered' or 'guest'
+  const [custCategoryFilter, setCustCategoryFilter] = useState('All');
+  const [custId, setCustId] = useState('');
+  const [guestInfo, setGuestInfo] = useState({ name: 'Guest', phone: '' });
 
   // Cart States
   const [prodId, setProdId] = useState('');
@@ -144,8 +145,16 @@ const Billing = () => {
     paymentBox: darkMode ? 'bg-dark border-secondary' : 'bg-light border'
   };
 
-  // --- 2. DYNAMIC OPTIONS ---
-  const customerOptions = (customers || []).map(c => ({ value: c.id, label: c.name, subLabel: c.phone }));
+  // --- 2. DYNAMIC OPTIONS & FILTERS ---
+  const filteredCustomers = (customers || []).filter(c => 
+      custCategoryFilter === 'All' ? true : c.category === custCategoryFilter
+  );
+
+  const customerOptions = filteredCustomers.map(c => ({ 
+      value: c.id, 
+      label: c.name, 
+      subLabel: `${c.phone} | ${c.category}` 
+  }));
   
   const productOptions = (products || []).map(p => {
       const isLow = p.stock_quantity <= (p.low_stock_limit || 5);
@@ -247,57 +256,46 @@ const Billing = () => {
       } catch (err) { Swal.fire('Error', 'Image upload failed.', 'error'); }
   };
 
-  // 🔥 UPDATED HANDLER: Auto-Generates Notes from Bill
+  // 🔥 HANDLER: Billing Submission
   const handleSubmit = async () => {
     if (cart.length === 0) return Swal.fire('Error', "Cart is empty!", 'warning');
-    if (!custId) return Swal.fire('Error', "Select a customer.", 'warning');
+    
+    // Validate Selection based on mode
+    if (billingMode === 'registered' && !custId) return Swal.fire('Error', "Select a customer.", 'warning');
+    if (billingMode === 'guest' && !guestInfo.name) return Swal.fire('Error', "Guest Name required.", 'warning');
+
     if ((parseFloat(paid) || 0) > grandTotal) return Swal.fire('Error', "Paid amount > Total!", 'error'); 
     
     setIsSubmitting(true);
     try {
-      // 1. CREATE BILL
+      // 1. Prepare Data
       const billData = {
-        customer_id: custId, 
         items: cart, 
-        paid_amount: parseFloat(paid) || 0
+        paid_amount: parseFloat(paid) || 0,
+        customer_id: billingMode === 'registered' ? custId : null,
+        guest_name: billingMode === 'guest' ? guestInfo.name : null,
+        guest_phone: billingMode === 'guest' ? guestInfo.phone : null,
+        send_whatsapp: billingMode === 'registered' 
       };
 
-      const billRes = await apiClient.post('/billing/create', billData);
+      await apiClient.post('/billing/create', billData);
       
-      // Access Invoice Number safely from response
-      // Handles both { id, invoice_no, ... } and { object: { id, invoice_no ... } }
-      const createdBill = billRes.data.object || billRes.data;
-      const invoiceRef = createdBill?.invoice_no ? `Invoice #${createdBill.invoice_no}` : "New Invoice";
-
-      // 2. CREATE SERVICE AUTOMATICALLY
-      if (scheduleService && serviceDate) {
-          
-          // 🔥 GENERATE DETAILED NOTES
-          const productList = cart.map(item => `${item.product_name} (x${item.quantity})`).join(', ');
-          const detailedNotes = `Linked to ${invoiceRef}. Items: ${productList}`;
-
-          const servicePayload = {
-              customer_id: custId,
-              employee_id: '', // Unassigned
-              service_date: serviceDate,
-              task_type: serviceType,
-              notes: detailedNotes // <--- Passes the invoice details here
-          };
-          
-          try {
-              await apiClient.post('/services/assign', servicePayload);
-          } catch (serviceErr) {
-              console.error("Service scheduling failed:", serviceErr);
-          }
-      }
-
       // 3. REFRESH & RESET
       fetchTodaysActivity(); 
       fetchProducts();
       loadBilling(); loadDebtors(); loadReports(); 
       
-      setCart([]); setPaid(''); setCustId(''); setScheduleService(false);
-      Swal.fire({ icon: 'success', title: 'Invoice & Service Created!', timer: 1500, showConfirmButton: false });
+      setCart([]); setPaid(''); setCustId('');
+      setGuestInfo({name: 'Guest', phone: ''});
+      
+      Swal.fire({ 
+          icon: 'success', 
+          title: 'Success!', 
+          text: billingMode === 'registered' ? 'Bill Created & WhatsApp Queued.' : 'Guest Bill Created.',
+          timer: 2000, 
+          showConfirmButton: false 
+      });
+
     } catch (err) { 
       Swal.fire({ icon: 'error', title: 'Failed', text: err.response?.data?.detail || "Error" });
     } finally { setIsSubmitting(false); }
@@ -333,30 +331,53 @@ const Billing = () => {
         {/* LEFT: INVOICE BUILDER */}
         <div className="col-lg-8">
           <div className={`card h-100 ${theme.card}`}>
-            <div className={`card-header pt-4 pb-0 ${theme.cardHeader}`}><h5 className="fw-bold"><i className="bi bi-receipt me-2 text-primary"></i>New Invoice</h5></div>
-            <div className="card-body p-4">
-              
-              <div className="row g-3 mb-4">
-                <div className="col-md-6"><SearchableSelect label="Customer" placeholder="Search..." options={customerOptions} value={custId} onChange={setCustId} theme={theme} darkMode={darkMode} /></div>
-                <div className="col-md-6 d-flex align-items-center pt-3">
-                    <div className="form-check form-switch ms-4">
-                        <input className="form-check-input" type="checkbox" checked={scheduleService} onChange={e => setScheduleService(e.target.checked)} />
-                        <label className={`form-check-label fw-bold ms-2 ${theme.text}`}>Schedule Service</label>
+            <div className={`card-header pt-4 pb-0 ${theme.cardHeader}`}>
+                <div className="d-flex justify-content-between align-items-center">
+                    <h5 className="fw-bold m-0"><i className="bi bi-receipt me-2 text-primary"></i>New Invoice</h5>
+                    <div className="btn-group btn-group-sm">
+                        <button className={`btn fw-bold ${billingMode === 'registered' ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setBillingMode('registered')}>Registered</button>
+                        <button className={`btn fw-bold ${billingMode === 'guest' ? 'btn-warning text-dark' : 'btn-outline-secondary'}`} onClick={() => setBillingMode('guest')}>Guest / Walk-in</button>
                     </div>
                 </div>
+            </div>
+            
+            <div className="card-body p-4">
+              
+              {/* CUSTOMER SECTION */}
+              <div className="row g-3 mb-4 align-items-end">
+                
+                {billingMode === 'registered' ? (
+                    <>
+                        <div className="col-md-3">
+                            <label className={`small fw-bold mb-1 ${theme.subText}`}>Filter</label>
+                            <select className={`form-select ${theme.input}`} value={custCategoryFilter} onChange={e => setCustCategoryFilter(e.target.value)}>
+                                <option value="All">All Categories</option>
+                                <option value="Customer">Customer</option>
+                                <option value="Dealer">Dealer</option>
+                                <option value="Technician">Technician</option>
+                            </select>
+                        </div>
+                        <div className="col-md-9">
+                            <SearchableSelect label="Select Client" placeholder="Search Name..." options={customerOptions} value={custId} onChange={setCustId} theme={theme} darkMode={darkMode} />
+                        </div>
+                    </>
+                ) : (
+                    <>
+                        <div className="col-md-6">
+                            <label className={`small fw-bold mb-1 ${theme.subText}`}>Guest Name</label>
+                            <input type="text" className={`form-control ${theme.input}`} placeholder="Enter Name" value={guestInfo.name} onChange={e => setGuestInfo({...guestInfo, name: e.target.value})} />
+                        </div>
+                        <div className="col-md-6">
+                            <label className={`small fw-bold mb-1 ${theme.subText}`}>Phone (Optional)</label>
+                            <input type="text" className={`form-control ${theme.input}`} placeholder="Phone" value={guestInfo.phone} onChange={e => setGuestInfo({...guestInfo, phone: e.target.value})} />
+                        </div>
+                    </>
+                )}
               </div>
-
-              {scheduleService && (
-                  <div className={`p-3 rounded border border-dashed mb-4 ${darkMode ? 'border-secondary' : 'bg-light'}`}>
-                      <div className="row g-3">
-                          <div className="col-md-6"><label className="small fw-bold">Date</label><input type="date" className={`form-control ${theme.input}`} value={serviceDate} onChange={e => setServiceDate(e.target.value)} /></div>
-                          <div className="col-md-6"><label className="small fw-bold">Task</label><select className={`form-select ${theme.input}`} value={serviceType} onChange={e => setServiceType(e.target.value)}><option>Installation</option><option>Service</option><option>Repair</option></select></div>
-                      </div>
-                  </div>
-              )}
 
               <hr className={theme.text} />
 
+              {/* PRODUCT FORM */}
               <form onSubmit={addToCart} className="mb-4">
                 <div className="d-flex justify-content-between mb-2">
                     <h6 className={`fw-bold ${theme.text}`}>Add Items</h6>
@@ -448,7 +469,10 @@ const Billing = () => {
                 {todaysBills.length === 0 ? <div className={`text-center py-5 ${theme.subText}`}>No sales yet today.</div> : 
                     todaysBills.map(b => (
                         <div key={b.id} className={`p-3 border-bottom d-flex justify-content-between align-items-center ${theme.listGroupItem}`}>
-                            <div><div className={`fw-bold ${theme.text}`}>{b.users?.name || 'Unknown'}</div><small className={theme.subText}>#{b.invoice_no}</small></div>
+                            <div>
+                                <div className={`fw-bold ${theme.text}`}>{b.users?.name || b.guest_name || 'Guest'}</div>
+                                <small className={theme.subText}>#{b.invoice_no}</small>
+                            </div>
                             <div className="text-end">
                                 <div className={`fw-bold ${theme.text}`}>₹{b.total_amount}</div>
                                 <span onClick={() => toggleStatus(b.id)} className={`badge ${b.invoice_status === 'Cancelled' ? 'bg-danger' : 'bg-success'}`} style={{cursor: 'pointer'}}>{b.invoice_status}</span>

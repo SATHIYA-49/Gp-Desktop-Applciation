@@ -4,8 +4,21 @@ import { GlobalContext } from '../context/GlobalState';
 import LowStockAlert from '../components/LowStockAlert'; 
 import ProductView from '../components/ProductView'; 
 import { useNavigate } from 'react-router-dom';
+import Swal from 'sweetalert2'; 
 
-// --- DEBOUNCE HOOK ---
+// --- 1. TOAST CONFIGURATION (The "Small Confirmation") ---
+const Toast = Swal.mixin({
+  toast: true,
+  position: 'top-end',
+  showConfirmButton: false,
+  timer: 3000,
+  timerProgressBar: true,
+  didOpen: (toast) => {
+    toast.addEventListener('mouseenter', Swal.stopTimer)
+    toast.addEventListener('mouseleave', Swal.resumeTimer)
+  }
+});
+
 const useDebounce = (value, delay) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
@@ -31,7 +44,6 @@ const Inventory = () => {
   const debouncedSearch = useDebounce(searchTerm, 500);
 
   // --- UI STATE ---
-  const [alertInfo, setAlertInfo] = useState({ show: false, type: '', message: '' });
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRestockModal, setShowRestockModal] = useState(false);
   const [showMasterModal, setShowMasterModal] = useState(false);
@@ -44,7 +56,11 @@ const Inventory = () => {
     net_price: '', sell_price: '', warranty_details: '', 
     low_stock_limit: '', 
     is_active: true,
-    specifications: { capacity: '', input_voltage: '', output_wave: '', application: '' }
+    specifications: { 
+        capacity: '', capacity_unit: 'Ah', 
+        input_voltage: '', voltage_unit: 'V',   
+        application: '', weight: '' 
+    }
   });
 
   const [filteredSubs, setFilteredSubs] = useState([]);
@@ -65,31 +81,34 @@ const Inventory = () => {
     subText: darkMode ? 'text-white-50' : 'text-muted',
     card: darkMode ? 'bg-dark border-secondary' : 'bg-white shadow-sm border-0',
     input: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-white text-dark border',
-    table: darkMode ? 'table-dark' : '', 
-    tableHeader: darkMode ? 'table-dark' : 'table-light',
+    table: darkMode ? 'table-dark' : 'table-hover', 
+    tableHeaderBg: darkMode ? '#212529' : '#f8f9fa', 
+    tableHeaderText: darkMode ? 'text-white' : 'text-secondary',
     modalContent: darkMode ? 'bg-dark text-white border border-secondary' : 'bg-white shadow-lg border-0',
     modalHeader: darkMode ? 'border-secondary bg-dark' : 'border-bottom bg-white',
     listGroupItem: darkMode ? 'bg-dark text-white border-secondary' : 'bg-white text-dark',
     btnGhost: darkMode ? 'btn-outline-light' : 'btn-outline-dark',
+    inputGroupText: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-light text-muted border',
+    unitSelect: darkMode ? 'bg-secondary text-white border-secondary' : 'bg-light text-dark border',
   };
 
   // --- FETCH PRODUCTS ---
-  const fetchProducts = useCallback(async (page = 1) => {
-    setLoading(true); 
+  const fetchProducts = useCallback(async (page = 1, isBackground = false) => {
+    if (!isBackground) setLoading(true); // Only show spinner for initial load or big changes
     try {
       const res = await apiClient.get('/inventory/products', {
-        params: { page, limit: 10, status: activeTab, search: debouncedSearch }
+        params: { page, limit: 5, status: activeTab, search: debouncedSearch }
       });
       setProductsData(res.data.data || []); 
       setPagination(res.data.pagination || { current_page: 1, total_pages: 1, total_items: 0 });
     } catch (error) {
       console.error("Fetch Products Error:", error);
     } finally {
-      setLoading(false); 
+      if (!isBackground) setLoading(false); 
     }
   }, [activeTab, debouncedSearch]);
 
-  // --- LOAD MASTER DATA (Fixed Dependency Warning) ---
+  // --- LOAD MASTER DATA ---
   useEffect(() => {
     if (brands.length > 0) return;
     if (hasFetchedMasterData.current === true) return;
@@ -99,25 +118,19 @@ const Inventory = () => {
 
   useEffect(() => { fetchProducts(1); }, [fetchProducts]); 
 
-  // --- PAGINATION ---
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= pagination.total_pages) fetchProducts(newPage);
   };
 
-  const showAlert = (type, message) => {
-    setAlertInfo({ show: true, type, message });
-    setTimeout(() => setAlertInfo({ show: false, type: '', message: '' }), 2500);
-  };
-
-  // --- SPECS HANDLER ---
+  // --- HANDLER FOR SPECS ---
   const handleSpecChange = (e) => {
-      const { name, value } = e.target;
+      let { name, value } = e.target;
+      if (name === 'capacity' || name === 'input_voltage' || name === 'weight') {
+          value = value.replace(/\D/g, ''); 
+      }
       setNewProduct(prev => ({
           ...prev,
-          specifications: {
-              ...prev.specifications,
-              [name]: value
-          }
+          specifications: { ...prev.specifications, [name]: value }
       }));
   };
 
@@ -128,7 +141,9 @@ const Inventory = () => {
           name: '', brand_id: '', category_id: '', sub_category_id: '', 
           net_price: '', sell_price: '', warranty_details: '', low_stock_limit: '', 
           is_active: true,
-          specifications: { capacity: '', input_voltage: '', output_wave: '', application: '' }
+          specifications: { 
+              capacity: '', capacity_unit: 'Ah', input_voltage: '', voltage_unit: 'V', application: '', weight: '' 
+          }
       });
       setFilteredSubs([]);
       setShowAddModal(true);
@@ -137,22 +152,15 @@ const Inventory = () => {
   const openEditModal = (product) => {
       setEditingProduct(product);
       const specs = product.specifications || {};
-      
       setNewProduct({
-          name: product.name, 
-          brand_id: product.brand_id, 
-          category_id: product.category_id,
-          sub_category_id: product.sub_category_id || '', 
-          net_price: product.net_price || '', 
-          sell_price: product.sell_price || '',
-          warranty_details: product.warranty_details || '', 
-          low_stock_limit: product.low_stock_limit || '',
-          is_active: product.is_active ?? true,
+          name: product.name, brand_id: product.brand_id, category_id: product.category_id,
+          sub_category_id: product.sub_category_id || '', net_price: product.net_price || '', 
+          sell_price: product.sell_price || '', warranty_details: product.warranty_details || '', 
+          low_stock_limit: product.low_stock_limit || '', is_active: product.is_active ?? true,
           specifications: {
-              capacity: specs.capacity || '',
-              input_voltage: specs.input_voltage || '',
-              output_wave: specs.output_wave || '',
-              application: specs.application || ''
+              capacity: specs.capacity || '', capacity_unit: specs.capacity_unit || 'Ah',
+              input_voltage: specs.input_voltage || '', voltage_unit: specs.voltage_unit || 'V',
+              application: specs.application || '', weight: specs.weight || ''
           }
       });
       setFilteredSubs(subCategories.filter(s => String(s.category_id) === String(product.category_id)));
@@ -165,64 +173,67 @@ const Inventory = () => {
     setFilteredSubs(subCategories.filter(s => String(s.category_id) === String(catId)));
   };
 
+  // 🔥 UPDATED: SUBMIT PRODUCT WITH TOAST
   const submitProduct = async (e) => {
     e.preventDefault();
-    if(!newProduct.name || !newProduct.brand_id || !newProduct.category_id || !newProduct.net_price || !newProduct.low_stock_limit) 
-        return showAlert('warning', "Please fill required fields.");
     
-    // 🔥 VALIDATION: Check Mandatory Spec Fields
+    // Validation
+    if(!newProduct.name || !newProduct.brand_id || !newProduct.category_id || !newProduct.net_price || !newProduct.low_stock_limit) 
+        return Swal.fire({ icon: 'warning', title: 'Missing Data', text: "Please fill all required fields." });
+    
     if (!newProduct.specifications.capacity || !newProduct.specifications.input_voltage) {
-        return showAlert('warning', "Technical Specs: Capacity and Voltage are required!");
+        return Swal.fire({ icon: 'warning', title: 'Missing Specs', text: "Capacity and Voltage are required!" });
     }
+
+    const cleanSpecs = Object.fromEntries(Object.entries(newProduct.specifications).filter(([_, v]) => v !== '' && v !== null));
 
     try {
       const payload = { 
-        ...newProduct, 
-        sku: editingProduct ? null : null, 
-        brand_id: String(newProduct.brand_id), 
-        category_id: String(newProduct.category_id),
+        ...newProduct, sku: editingProduct ? null : null, 
+        brand_id: String(newProduct.brand_id), category_id: String(newProduct.category_id),
         sub_category_id: newProduct.sub_category_id ? String(newProduct.sub_category_id) : null,
-        net_price: parseFloat(newProduct.net_price), 
-        sell_price: parseFloat(newProduct.sell_price),
-        low_stock_limit: parseInt(newProduct.low_stock_limit),
-        specifications: newProduct.specifications // Always send specs
+        net_price: parseFloat(newProduct.net_price), sell_price: parseFloat(newProduct.sell_price),
+        low_stock_limit: parseInt(newProduct.low_stock_limit), specifications: cleanSpecs 
       };
 
       if (editingProduct) { 
           await apiClient.put(`/inventory/products/${editingProduct.id}`, payload); 
-          showAlert('success', 'Product Updated!'); 
+          Toast.fire({ icon: 'success', title: 'Product Updated' }); // 🔥 TOAST
       } else { 
           await apiClient.post('/inventory/products', payload); 
-          showAlert('success', 'Product Created!'); 
+          Toast.fire({ icon: 'success', title: 'Product Created' }); // 🔥 TOAST
       }
-      setShowAddModal(false); fetchProducts(pagination.current_page);
-    } catch (err) { showAlert('danger', err.response?.data?.detail || "Failed to save product"); }
+      setShowAddModal(false); 
+      fetchProducts(pagination.current_page, true); // Background refresh
+      
+    } catch (err) { 
+        console.error("Submit Error:", err);
+        const errorDetail = err.response?.data?.detail;
+        let displayMsg = "Failed to save product.";
+        if (Array.isArray(errorDetail)) displayMsg = errorDetail.map(e => `• ${e.msg}`).join('<br>');
+        else if (typeof errorDetail === 'string') displayMsg = errorDetail;
+
+        Swal.fire({ icon: 'error', title: 'Validation Error', html: `<div class="text-start text-danger fw-bold">${displayMsg}</div>` });
+    }
   };
 
-  // --- RESTOCK LOGIC ---
+  // --- RESTOCK & MASTER HANDLERS ---
   const openRestockModal = (p) => { 
       setRestockData({ id: p.id, name: p.name, qty: '', received_date: new Date().toISOString().split('T')[0] }); 
       setShowRestockModal(true); 
   };
+  
   const submitRestock = async () => { 
     const qty = parseInt(restockData.qty);
-    if (!qty || qty <= 0) return showAlert('warning', "Enter valid qty");
+    if (!qty || qty <= 0) return Swal.fire('Error', "Enter valid quantity", 'warning');
     try {
       await apiClient.post('/inventory/restock', { product_id: String(restockData.id), quantity_arrived: qty, received_date: restockData.received_date });
-      showAlert('success', 'Stock Updated!'); setShowRestockModal(false); fetchProducts(pagination.current_page);
-    } catch (err) { showAlert('danger', "Restock Failed"); }
+      
+      setShowRestockModal(false); 
+      Toast.fire({ icon: 'success', title: 'Stock Updated Successfully' }); // 🔥 TOAST
+      fetchProducts(pagination.current_page, true); 
+    } catch (err) { Swal.fire('Error', "Restock Failed", 'error'); }
   };
-
-  // --- MASTER DATA LOGIC ---
-  useEffect(() => {
-    setMasterInput(''); setEditingMaster(null); 
-    if (masterTab === 'brand') setMasterList(brands);
-    else if (masterTab === 'category') setMasterList(categories);
-    else if (masterTab === 'sub-category') {
-        if(selectedParentCat) setMasterList(subCategories.filter(s => String(s.category_id) === String(selectedParentCat)));
-        else setMasterList([]);
-    }
-  }, [masterTab, selectedParentCat, brands, categories, subCategories]);
 
   const handleMasterSubmit = async () => { 
     if (!masterInput.trim()) return;
@@ -231,13 +242,19 @@ const Inventory = () => {
       const payload = { name: masterInput };
       if (masterTab === 'sub-category') {
           const catId = editingMaster ? editingMaster.category_id : selectedParentCat;
-          if (!catId) return showAlert('warning', "Select Parent Category");
+          if (!catId) return Swal.fire('Warning', "Select Parent Category", 'warning');
           payload.category_id = String(catId);
       }
-      if (editingMaster) { await apiClient.put(`/inventory/${endpoint}/${editingMaster.id}`, payload); showAlert('success', `${masterTab} updated!`); } 
-      else { await apiClient.post(`/inventory/${endpoint}`, payload); showAlert('success', `${masterTab} added!`); }
+      if (editingMaster) { 
+          await apiClient.put(`/inventory/${endpoint}/${editingMaster.id}`, payload); 
+          Toast.fire({ icon: 'success', title: `${masterTab} Updated` }); // 🔥 TOAST
+      } 
+      else { 
+          await apiClient.post(`/inventory/${endpoint}`, payload); 
+          Toast.fire({ icon: 'success', title: `${masterTab} Added` }); // 🔥 TOAST
+      }
       setMasterInput(''); setEditingMaster(null); loadInventoryData();
-    } catch (err) { showAlert('danger', "Action Failed"); }
+    } catch (err) { Swal.fire('Error', "Action Failed", 'error'); }
   };
 
   const promptDelete = (id, type, name) => setConfirmModal({ show: true, id, type, title: name });
@@ -248,10 +265,12 @@ const Inventory = () => {
       try {
           const endpoint = `/inventory/${type === 'product' ? 'products' : type + 's'}/${id}`;
           await apiClient.delete(endpoint);
-          if(type === 'product') fetchProducts(pagination.current_page);
+          
+          Toast.fire({ icon: 'success', title: 'Item Deleted' }); // 🔥 TOAST
+          
+          if(type === 'product') fetchProducts(pagination.current_page, true);
           else loadInventoryData();
-          showAlert('success', 'Item deleted.');
-      } catch (err) { showAlert('danger', "Delete failed."); }
+      } catch (err) { Swal.fire('Error', "Delete failed.", 'error'); }
   };
 
   const getBrandName = (id) => brands.find(b => b.id === id)?.name || 'Unknown';
@@ -261,14 +280,26 @@ const Inventory = () => {
   const toggleActiveStatus = async (product) => { 
       try {
           const newStatus = !product.is_active;
+          // Optimistic Update
           setProductsData(prev => prev.map(p => p.id === product.id ? { ...p, is_active: newStatus } : p));
           await apiClient.patch(`/inventory/products/${product.id}/status`, { is_active: newStatus });
-          showAlert('success', `Status updated!`);
+          Toast.fire({ icon: 'success', title: `Product ${newStatus ? 'Activated' : 'Deactivated'}` }); // 🔥 TOAST
       } catch (err) {
           fetchProducts(pagination.current_page);
-          showAlert('danger', "Failed to update status");
+          Toast.fire({ icon: 'error', title: 'Status Update Failed' });
       }
   };
+
+  // --- MASTER DATA FILTER EFFECT ---
+  useEffect(() => {
+    setMasterInput(''); setEditingMaster(null); 
+    if (masterTab === 'brand') setMasterList(brands);
+    else if (masterTab === 'category') setMasterList(categories);
+    else if (masterTab === 'sub-category') {
+        if(selectedParentCat) setMasterList(subCategories.filter(s => String(s.category_id) === String(selectedParentCat)));
+        else setMasterList([]);
+    }
+  }, [masterTab, selectedParentCat, brands, categories, subCategories]);
 
   return (
     <div className={`container-fluid p-4 ${theme.text}`} style={{ minHeight: '100vh', background: darkMode ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : '#f8f9fa', position: 'relative' }}>
@@ -283,85 +314,75 @@ const Inventory = () => {
       </div>
 
       {/* CONTROLS */}
-      <div className="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-3">
+      <div className="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-3">
         <div className="d-flex gap-2">
             <button className={`btn fw-bold px-4 rounded-pill shadow-sm ${activeTab === 'active' ? 'btn-primary' : 'btn-light border'}`} onClick={() => setActiveTab('active')}>Active</button>
             <button className={`btn fw-bold px-4 rounded-pill shadow-sm ${activeTab === 'inactive' ? 'btn-secondary' : 'btn-light border'}`} onClick={() => setActiveTab('inactive')}>Inactive</button>
         </div>
-        <div className="position-relative" style={{ width: '300px' }}>
-            <i className={`bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 ${theme.subText}`}></i>
-            <input type="text" className={`form-control rounded-pill ps-5 ${theme.input} shadow-sm`} placeholder="Search products..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+        <div className="d-flex gap-2">
+            <div className="position-relative" style={{ width: '300px' }}>
+                <i className={`bi bi-search position-absolute top-50 start-0 translate-middle-y ms-3 ${theme.subText}`}></i>
+                <input type="text" className={`form-control rounded-pill ps-5 ${theme.input} shadow-sm`} placeholder="Search products..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            </div>
+            <button className="btn btn-outline-primary shadow-sm" onClick={() => navigate('/inventory/history')}>
+                <i className="bi bi-clock-history"></i> History
+            </button>
         </div>
-      </div>
-      
-      {/* HISTORY BUTTON */}
-      <div className="mb-3 d-flex justify-content-end">
-        <button className="btn btn-sm btn-outline-primary" onClick={() => navigate('/inventory/history')}>
-            <i className="bi bi-clock-history me-2"></i> View Restock History
-        </button>
       </div>
 
-      {/* ALERTS */}
-      {alertInfo.show && (
-        <div className="shadow-lg rounded animate__animated animate__slideInDown" style={{ position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', zIndex: 10000, backgroundColor: darkMode ? '#2c3034' : '#fff', borderLeft: `5px solid ${alertInfo.type === 'success' ? '#198754' : '#dc3545'}`, padding: '12px 20px', display: 'flex', alignItems: 'center' }}>
-            <i className={`bi ${alertInfo.type === 'success' ? 'bi-check-circle-fill text-success' : 'bi-exclamation-triangle-fill text-warning'} fs-5 me-3`}></i><span className="fw-bold">{alertInfo.message}</span>
-        </div>
-      )}
       <div style={{ position: 'absolute', top: '90px', right: '20px', zIndex: 1050, maxWidth: '350px', width: '100%' }}>
           <LowStockAlert onRestockClick={openRestockModal} />
       </div>
 
-      {/* TABLE */}
-      <div className={`card overflow-hidden ${theme.card}`} style={{ minHeight: '400px' }}>
-        {loading ? (
-           <div className="d-flex flex-column justify-content-center align-items-center h-100 py-5">
-             <div className="spinner-border text-primary" style={{ width: '3rem', height: '3rem' }} role="status"><span className="visually-hidden">Loading...</span></div>
-             <p className={`mt-3 fw-bold ${theme.subText} animate__animated animate__pulse animate__infinite`}>Loading Inventory Data...</p>
-           </div>
-        ) : (
-           <>
-            <div className="table-responsive">
-                <table className={`table align-middle mb-0 ${theme.table}`}>
-                    <thead className={theme.tableHeader}>
-                        <tr><th className="ps-4">Product Name</th><th>Brand</th><th>Category</th><th>Sub-Cat</th><th>Status</th><th>Stock</th><th>Price</th><th className="text-end pe-4">Actions</th></tr>
-                    </thead>
-                    <tbody className={darkMode ? 'border-secondary' : ''}>
-                        {productsData.length === 0 ? (
-                            <tr><td colSpan="8" className="text-center py-5 text-muted">No products found.</td></tr>
-                        ) : productsData.map(p => (
-                            <tr key={p.id} className={!p.is_active ? 'opacity-50' : ''}>
-                                <td className="ps-4"><div className="fw-bold">{p.name}</div><div className="small opacity-50">{p.sku}</div></td>
-                                <td>{getBrandName(p.brand_id)}</td>
-                                <td>{getCatName(p.category_id)}</td>
-                                <td>{getSubName(p.sub_category_id)}</td>
-                                <td><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={p.is_active ?? true} onChange={() => toggleActiveStatus(p)} /></div></td>
-                                <td>
-                                    <span className={`badge rounded-pill px-3 py-2 ${p.stock_quantity <= p.low_stock_limit ? 'bg-danger animate__animated animate__flash animate__infinite' : 'bg-success-subtle text-success'}`}>
-                                        {p.stock_quantity} Units
-                                    </span>
-                                    {p.stock_quantity <= p.low_stock_limit && <div className="text-danger x-small fw-bold mt-1">Reorder Now</div>}
-                                </td>
-                                <td className="fw-bold">₹{p.sell_price}</td>
-                                <td className="text-end pe-4">
-                                    <button className="btn btn-sm btn-outline-primary me-2" onClick={() => setViewProduct(p)} title="View Details"><i className="bi bi-eye"></i></button>
-                                    <button className="btn btn-sm btn-outline-warning me-2" onClick={() => openRestockModal(p)} title="Restock"><i className="bi bi-box-arrow-in-down"></i></button>
-                                    <button className="btn btn-sm btn-outline-info me-2" onClick={() => openEditModal(p)} title="Edit"><i className="bi bi-pencil-square"></i></button>
-                                    <button className="btn btn-sm btn-outline-danger" onClick={() => promptDelete(p.id, 'product', p.name)} title="Delete"><i className="bi bi-trash"></i></button>
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-            <div className="card-footer d-flex justify-content-between align-items-center py-3">
-              <small className={theme.subText}>Page {pagination.current_page} of {pagination.total_pages}</small>
-              <div className="btn-group">
+      {/* TABLE SECTION */}
+      <div className={`card shadow-sm border-0 ${theme.card}`} style={{ height: 'calc(100vh - 240px)', display: 'flex', flexDirection: 'column' }}>
+        <div className="table-responsive flex-grow-1" style={{ overflow: 'auto' }}>
+            <table className={`table align-middle mb-0 text-nowrap ${theme.table}`}>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 5, backgroundColor: theme.tableHeaderBg }}>
+                    <tr className={theme.tableHeaderText}>
+                        <th className="ps-4 py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Product Name</th>
+                        <th className="py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Brand</th>
+                        <th className="py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Category</th>
+                        <th className="py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Sub-Cat</th>
+                        <th className="py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Status</th>
+                        <th className="py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Stock</th>
+                        <th className="py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Price</th>
+                        <th className="text-end pe-4 py-3" style={{ backgroundColor: theme.tableHeaderBg }}>Actions</th>
+                    </tr>
+                </thead>
+                <tbody className={darkMode ? 'border-secondary' : ''}>
+                    {loading ? (
+                        <tr><td colSpan="8" className="text-center py-5"><div className="spinner-border text-primary" role="status"></div></td></tr>
+                    ) : productsData.length === 0 ? (
+                        <tr><td colSpan="8" className="text-center py-5 text-muted">No products found.</td></tr>
+                    ) : productsData.map(p => (
+                        <tr key={p.id} className={!p.is_active ? 'opacity-50' : ''}>
+                            <td className="ps-4"><div className="fw-bold">{p.name}</div><div className="small opacity-50">{p.sku}</div></td>
+                            <td>{getBrandName(p.brand_id)}</td>
+                            <td>{getCatName(p.category_id)}</td>
+                            <td>{getSubName(p.sub_category_id)}</td>
+                            <td><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={p.is_active ?? true} onChange={() => toggleActiveStatus(p)} /></div></td>
+                            <td><span className={`badge rounded-pill px-3 py-2 ${p.stock_quantity <= p.low_stock_limit ? 'bg-danger animate__animated animate__flash' : 'bg-success-subtle text-success'}`}>{p.stock_quantity}</span></td>
+                            <td className="fw-bold">₹{p.sell_price}</td>
+                            <td className="text-end pe-4">
+                                <button className="btn btn-sm btn-outline-primary me-2" onClick={() => setViewProduct(p)} title="View"><i className="bi bi-eye"></i></button>
+                                <button className="btn btn-sm btn-outline-warning me-2" onClick={() => openRestockModal(p)} title="Restock"><i className="bi bi-box-arrow-in-down"></i></button>
+                                <button className="btn btn-sm btn-outline-info me-2" onClick={() => openEditModal(p)} title="Edit"><i className="bi bi-pencil-square"></i></button>
+                                <button className="btn btn-sm btn-outline-danger" onClick={() => promptDelete(p.id, 'product', p.name)} title="Delete"><i className="bi bi-trash"></i></button>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+
+        <div className="card-footer border-top d-flex justify-content-between align-items-center py-2 bg-transparent">
+            <small className={theme.subText}>Page {pagination.current_page} of {pagination.total_pages}</small>
+            <div className="btn-group">
                 <button className="btn btn-sm btn-outline-secondary" disabled={pagination.current_page === 1} onClick={() => handlePageChange(pagination.current_page - 1)}>Prev</button>
                 <button className="btn btn-sm btn-outline-secondary" disabled={pagination.current_page === pagination.total_pages} onClick={() => handlePageChange(pagination.current_page + 1)}>Next</button>
-              </div>
             </div>
-           </>
-        )}
+        </div>
       </div>
 
       {/* MODAL: ADD/EDIT PRODUCT */}
@@ -373,33 +394,46 @@ const Inventory = () => {
                     <div className="modal-body p-4">
                         <form onSubmit={submitProduct}>
                             <div className="row g-3">
-                                {/* BASIC DETAILS */}
                                 <div className="col-12"><label className="form-label small fw-bold">Name <span className="text-danger">*</span></label><input type="text" className={`form-control ${theme.input}`} required value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} /></div>
                                 <div className="col-md-6"><label className="form-label small fw-bold">Brand <span className="text-danger">*</span></label><select className={`form-select ${theme.input}`} required value={newProduct.brand_id} onChange={e => setNewProduct({...newProduct, brand_id: e.target.value})}><option value="">Select Brand...</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
                                 <div className="col-md-6"><label className="form-label small fw-bold">Category <span className="text-danger">*</span></label><select className={`form-select ${theme.input}`} required value={newProduct.category_id} onChange={handleCategoryChange}><option value="">Select Category...</option>{categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                                 <div className="col-md-6"><label className="form-label small fw-bold">Sub-Category</label><select className={`form-select ${theme.input}`} value={newProduct.sub_category_id} onChange={e => setNewProduct({...newProduct, sub_category_id: e.target.value})}><option value="">None</option>{filteredSubs.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
                                 <div className="col-md-6"><label className="form-label small fw-bold">Buy Price <span className="text-danger">*</span></label><input type="number" step="0.01" className={`form-control ${theme.input}`} required value={newProduct.net_price} onChange={e => setNewProduct({...newProduct, net_price: e.target.value})} /></div>
-                                <div className="col-md-6"><label className="form-label small fw-bold">Sell Price <span className="text-danger">*</span></label><input type="number" step="0.01" className={`form-control ${theme.input}`} required value={newProduct.sell_price} onChange={e => setNewProduct({...newProduct, sell_price: e.target.value})} /></div>
+                                <div className="col-md-6"><label className="form-label small fw-bold">Sell Price <span className="text-danger">*</span></label><input type="number" step="0.01" className={`form-control ${theme.input}`} required value={newProduct.sell_price} onChange={e => setNewProduct({...newProduct, sell_price: e.target.value})} /></div> 
+                                
                                 <div className="col-md-6">
-                                    <label className="form-label small fw-bold">Capacity (e.g. 900 VA) <span className="text-danger">*</span></label>
-                                    <input type="text" name="capacity" className={`form-control ${theme.input}`} required placeholder="Required" value={newProduct.specifications.capacity} onChange={handleSpecChange} />
+                                    <label className="form-label small fw-bold">Capacity <span className="text-danger">*</span></label>
+                                    <div className="input-group">
+                                        <input type="text" name="capacity" className={`form-control ${theme.input}`} required placeholder="e.g. 150" value={newProduct.specifications.capacity} onChange={handleSpecChange} />
+                                        <select name="capacity_unit" className={`form-select ${theme.unitSelect}`} style={{maxWidth: '90px'}} value={newProduct.specifications.capacity_unit} onChange={handleSpecChange}>
+                                            <option value="Ah">Ah</option><option value="VA">VA</option><option value="kVA">kVA</option><option value="Watts">Watts</option><option value="kW">kW</option>
+                                        </select>
+                                    </div>
                                 </div>
+
                                 <div className="col-md-6">
-                                    <label className="form-label small fw-bold">Input Voltage (e.g. 12 V) <span className="text-danger">*</span></label>
-                                    <input type="text" name="input_voltage" className={`form-control ${theme.input}`} required placeholder="Required" value={newProduct.specifications.input_voltage} onChange={handleSpecChange} />
+                                    <label className="form-label small fw-bold">Input Voltage <span className="text-danger">*</span></label>
+                                    <div className="input-group">
+                                        <input type="text" name="input_voltage" className={`form-control ${theme.input}`} required placeholder="e.g. 12" value={newProduct.specifications.input_voltage} onChange={handleSpecChange} />
+                                        <select name="voltage_unit" className={`form-select ${theme.unitSelect}`} style={{maxWidth: '80px'}} value={newProduct.specifications.voltage_unit} onChange={handleSpecChange}>
+                                            <option value="V">V</option><option value="kV">kV</option>
+                                        </select>
+                                    </div>
                                 </div>
+
                                 <div className="col-md-6">
-                                    <label className="form-label small fw-bold">Output Wave <span className="text-muted fw-normal">(Optional)</span></label>
-                                    <select name="output_wave" className={`form-select ${theme.input}`} value={newProduct.specifications.output_wave} onChange={handleSpecChange}>
-                                        <option value="">Select Wave Type...</option>
-                                        <option value="Sine Wave">Sine Wave</option>
-                                        <option value="Square Wave">Square Wave</option>
-                                        <option value="Modified Sine Wave">Modified Sine Wave</option>
-                                    </select>
+                                    <label className="form-label small fw-bold">Weight <span className="text-muted fw-normal">(Optional)</span></label>
+                                    <div className="input-group">
+                                        <input type="text" name="weight" className={`form-control ${theme.input}`} placeholder="e.g. 25" value={newProduct.specifications.weight} onChange={handleSpecChange} />
+                                        <span className={`input-group-text ${theme.inputGroupText}`}>kg</span>
+                                    </div>
                                 </div>
+
                                 <div className="col-md-6">
                                     <label className="form-label small fw-bold">Application <span className="text-muted fw-normal">(Optional)</span></label>
-                                    <input type="text" name="application" className={`form-control ${theme.input}`} placeholder="e.g. Home, Office" value={newProduct.specifications.application} onChange={handleSpecChange} />
+                                    <select name="application" className={`form-select ${theme.input}`} value={newProduct.specifications.application} onChange={handleSpecChange}>
+                                        <option value="">Select Usage...</option><option value="Home Power Backup">Home Power Backup</option><option value="Office / Commercial">Office / Commercial</option><option value="Solar Power System">Solar Power System</option><option value="Automotive / Vehicle">Automotive / Vehicle</option><option value="Heavy Industrial">Heavy Industrial</option>
+                                    </select>
                                 </div>
 
                                 <div className="col-md-6"><label className="form-label small fw-bold text-warning">Low Stock Limit <span className="text-danger">*</span></label><input type="number" className={`form-control ${theme.input} border-warning`} required placeholder="e.g. 5" value={newProduct.low_stock_limit} onChange={e => setNewProduct({...newProduct, low_stock_limit: e.target.value})} /></div>
@@ -413,7 +447,7 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* MODAL: RESTOCK */}
+      {/* RESTOCK MODAL */}
       {showRestockModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-dialog-centered">
@@ -430,12 +464,12 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* MODAL: MASTER DATA */}
+      {/* MASTER DATA MODAL */}
       {showMasterModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-lg modal-dialog-centered">
                 <div className={`modal-content ${theme.modalContent}`}>
-                    <div className={`modal-header ${theme.modalHeader}`}><h5 className="modal-title fw-bold">Manage Data</h5><button className="btn-close" onClick={() => setShowMasterModal(false)}></button></div>
+                    <div className={`modal-header ${theme.modalHeader}`}><h5 className="modal-title fw-bold">Manage Brands And Categories</h5><button className="btn-close" onClick={() => setShowMasterModal(false)}></button></div>
                     <div className="modal-body p-4">
                         <div className="d-flex gap-2 mb-3">
                             {['brand', 'category', 'sub-category'].map(t => (
@@ -464,7 +498,7 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* MODAL: CONFIRM DELETE */}
+      {/* CONFIRM DELETE MODAL */}
       {confirmModal.show && (
         <div className="modal fade show d-block" style={{ zIndex: 1100, backgroundColor: 'rgba(0,0,0,0.8)' }}>
             <div className="modal-dialog modal-dialog-centered" style={{ maxWidth: '400px' }}>
@@ -481,7 +515,6 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* VIEW MODAL */}
       <ProductView show={!!viewProduct} product={viewProduct} onClose={() => setViewProduct(null)} theme={theme} darkMode={darkMode} />
     </div>
   );
