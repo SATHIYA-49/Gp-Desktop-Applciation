@@ -65,14 +65,24 @@ const CustomerFormModal = ({ customer, onClose, onSuccess, theme }) => {
     setPhoneStatus({ loading: true, error: null, valid: false });
     try {
       const res = await apiClient.get(`/customers/check-phone?phone=${phone}`);
-      if (res.data.exists) {
-        setPhoneStatus({ loading: false, error: `Taken by: ${res.data.customer_name}`, valid: false });
+      const data = res.data || {};
+      const exists = typeof data.exists === 'boolean' ? data.exists : !!data.object?.exists;
+      const customerName = data.customer_name || data.object?.customer_name || null;
+      if (exists) {
+        const label = customerName ? `Taken by: ${customerName}` : 'Phone number is already in use';
+        setPhoneStatus({ loading: false, error: label, valid: false });
       } else {
         setPhoneStatus({ loading: false, error: null, valid: true });
       }
     } catch (err) {
-      // Backend validation error (e.g. not 10 digits)
-      setPhoneStatus({ loading: false, error: null, valid: false });
+      const detail = err.response?.data?.detail;
+      let msg = null;
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail) && detail.length) {
+        msg = detail.map(e => e.msg).join(', ');
+      }
+      setPhoneStatus({ loading: false, error: msg, valid: false });
     }
   };
 
@@ -91,7 +101,7 @@ const CustomerFormModal = ({ customer, onClose, onSuccess, theme }) => {
     e.preventDefault();
 
     // Client Side Validation
-    if (formData.phone.length !== 10) return Swal.fire({ icon: 'warning', title: 'Invalid Phone', text: 'Phone number must be exactly 10 digits.' });
+    if (formData.phone.length !== 10) return Swal.fire({ icon: 'warning', title: 'Invalid Phone', text: 'Please enter a 10-digit mobile number.' });
     if (phoneStatus.error) return Swal.fire({ icon: 'warning', title: 'Duplicate Phone', text: phoneStatus.error });
     if (!formData.name.trim()) return Swal.fire({ icon: 'warning', title: 'Missing Name', text: 'Customer name is required.' });
 
@@ -106,11 +116,13 @@ const CustomerFormModal = ({ customer, onClose, onSuccess, theme }) => {
 
     try {
       if (customer) {
-        await apiClient.put(`/customers/${customer.id}`, payload);
-        Toast.fire({ icon: 'success', title: 'Customer Updated' });
+        const res = await apiClient.put(`/customers/${customer.id}`, payload);
+        const msg = res.data?.message || 'Customer updated successfully';
+        Toast.fire({ icon: 'success', title: msg });
       } else {
-        await apiClient.post('/customers', payload);
-        Toast.fire({ icon: 'success', title: 'Customer Added' });
+        const res = await apiClient.post('/customers', payload);
+        const msg = res.data?.message || 'Customer added successfully';
+        Toast.fire({ icon: 'success', title: msg });
       }
       onSuccess(); 
       onClose();   
@@ -245,12 +257,14 @@ const Customers = () => {
         const res = await apiClient.get('/customers/', {
           params: { page, limit: 5, search: debouncedSearch, category: categoryFilter } // Added Category Filter to API
         });
-        
-        setCustomersData(res.data.data || []);
-        const total = res.data.total || 0;
+        const payload = res.data || {};
+        const items = Array.isArray(payload.data) ? payload.data : (payload.object?.items || []);
+        const total = typeof payload.total === 'number' ? payload.total : (payload.object?.total || 0);
+        const limit = payload.limit || payload.object?.limit || 5;
+        setCustomersData(items);
         setPagination({
           current_page: page,
-          total_pages: Math.ceil(total / res.data.limit),
+          total_pages: limit ? Math.max(1, Math.ceil(total / limit)) : 1,
           total_items: total
         });
     } catch (error) {
@@ -284,8 +298,9 @@ const Customers = () => {
 
     if (result.isConfirmed) {
       try {
-        await apiClient.delete(`/customers/${id}`);
-        Toast.fire({ icon: 'success', title: 'Deleted successfully' });
+        const res = await apiClient.delete(`/customers/${id}`);
+        const msg = res.data?.message || 'Customer deleted successfully';
+        Toast.fire({ icon: 'success', title: msg });
         fetchCustomers(pagination.current_page);
       } catch (err) {
         // Handle Foreign Key Error (e.g., Cannot delete because of sales)

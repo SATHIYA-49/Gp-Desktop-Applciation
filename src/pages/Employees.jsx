@@ -75,9 +75,27 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
     e.preventDefault();
     
     // Client Validation
-    if (formData.phone.length !== 10) return Swal.fire({ icon: 'warning', title: 'Invalid Phone', text: 'Must be 10 digits.' });
-    if (phoneStatus.error) return Swal.fire({ icon: 'warning', title: 'Duplicate Phone', text: phoneStatus.error });
-    if (!formData.name.trim()) return Swal.fire({ icon: 'warning', title: 'Missing Name', text: 'Name is required.' });
+    if (formData.phone.length !== 10) {
+      return Swal.fire({ 
+        icon: 'warning', 
+        title: 'Check mobile number', 
+        text: 'Please enter a 10-digit mobile number.' 
+      });
+    }
+    if (phoneStatus.error) {
+      return Swal.fire({ 
+        icon: 'warning', 
+        title: 'Number already in use', 
+        text: 'This mobile number is already registered for another staff member.' 
+      });
+    }
+    if (!formData.name.trim()) {
+      return Swal.fire({ 
+        icon: 'warning', 
+        title: 'Enter name', 
+        text: 'Please enter the technician name.' 
+      });
+    }
 
     setLoading(true);
     try {
@@ -162,7 +180,7 @@ const EmployeeFormModal = ({ employee, onClose, onSuccess, theme, darkMode }) =>
                 </div>
 
                 <button disabled={loading || phoneStatus.checking || phoneStatus.error} className="btn btn-primary w-100 fw-bold py-2 rounded-pill shadow-sm">
-                  {loading ? 'Saving...' : 'Save Employee'}
+                  {loading ? 'Saving...' : employee ? 'Save Changes' : 'Add Employee'}
                 </button>
               </form>
             </div>

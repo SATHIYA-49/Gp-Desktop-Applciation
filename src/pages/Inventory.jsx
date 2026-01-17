@@ -6,7 +6,7 @@ import ProductView from '../components/ProductView';
 import { useNavigate } from 'react-router-dom';
 import Swal from 'sweetalert2'; 
 
-// --- 1. TOAST CONFIGURATION (The "Small Confirmation") ---
+// --- 1. TOAST CONFIGURATION ---
 const Toast = Swal.mixin({
   toast: true,
   position: 'top-end',
@@ -49,6 +49,10 @@ const Inventory = () => {
   const [showMasterModal, setShowMasterModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, id: null, type: null, title: '' });
   const [viewProduct, setViewProduct] = useState(null); 
+  
+  // 🔥 NEW STATE: Prevent duplicate clicks on Restock
+  const [isRestocking, setIsRestocking] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
 
   // --- FORM DATA ---
   const [newProduct, setNewProduct] = useState({
@@ -94,13 +98,16 @@ const Inventory = () => {
 
   // --- FETCH PRODUCTS ---
   const fetchProducts = useCallback(async (page = 1, isBackground = false) => {
-    if (!isBackground) setLoading(true); // Only show spinner for initial load or big changes
+    if (!isBackground) setLoading(true); 
     try {
       const res = await apiClient.get('/inventory/products', {
         params: { page, limit: 5, status: activeTab, search: debouncedSearch }
       });
-      setProductsData(res.data.data || []); 
-      setPagination(res.data.pagination || { current_page: 1, total_pages: 1, total_items: 0 });
+      const payload = res.data || {};
+      const items = payload.data || payload.object?.items || [];
+      const meta = payload.pagination || payload.object?.pagination || { current_page: 1, total_pages: 1, total_items: 0 };
+      setProductsData(Array.isArray(items) ? items : []); 
+      setPagination(meta);
     } catch (error) {
       console.error("Fetch Products Error:", error);
     } finally {
@@ -173,11 +180,12 @@ const Inventory = () => {
     setFilteredSubs(subCategories.filter(s => String(s.category_id) === String(catId)));
   };
 
-  // 🔥 UPDATED: SUBMIT PRODUCT WITH TOAST
+  // --- SUBMIT PRODUCT ---
   const submitProduct = async (e) => {
     e.preventDefault();
+
+    if (isSavingProduct) return;
     
-    // Validation
     if(!newProduct.name || !newProduct.brand_id || !newProduct.category_id || !newProduct.net_price || !newProduct.low_stock_limit) 
         return Swal.fire({ icon: 'warning', title: 'Missing Data', text: "Please fill all required fields." });
     
@@ -188,6 +196,7 @@ const Inventory = () => {
     const cleanSpecs = Object.fromEntries(Object.entries(newProduct.specifications).filter(([_, v]) => v !== '' && v !== null));
 
     try {
+      setIsSavingProduct(true);
       const payload = { 
         ...newProduct, sku: editingProduct ? null : null, 
         brand_id: String(newProduct.brand_id), category_id: String(newProduct.category_id),
@@ -198,13 +207,13 @@ const Inventory = () => {
 
       if (editingProduct) { 
           await apiClient.put(`/inventory/products/${editingProduct.id}`, payload); 
-          Toast.fire({ icon: 'success', title: 'Product Updated' }); // 🔥 TOAST
+          Toast.fire({ icon: 'success', title: `Updated: ${newProduct.name}` });
       } else { 
           await apiClient.post('/inventory/products', payload); 
-          Toast.fire({ icon: 'success', title: 'Product Created' }); // 🔥 TOAST
+          Toast.fire({ icon: 'success', title: `Created: ${newProduct.name}` });
       }
       setShowAddModal(false); 
-      fetchProducts(pagination.current_page, true); // Background refresh
+      fetchProducts(pagination.current_page, true);
       
     } catch (err) { 
         console.error("Submit Error:", err);
@@ -214,11 +223,14 @@ const Inventory = () => {
         else if (typeof errorDetail === 'string') displayMsg = errorDetail;
 
         Swal.fire({ icon: 'error', title: 'Validation Error', html: `<div class="text-start text-danger fw-bold">${displayMsg}</div>` });
+    } finally {
+        setIsSavingProduct(false);
     }
   };
 
-  // --- RESTOCK & MASTER HANDLERS ---
+  // --- RESTOCK LOGIC (FIXED) ---
   const openRestockModal = (p) => { 
+      setIsRestocking(false); // Reset lock
       setRestockData({ id: p.id, name: p.name, qty: '', received_date: new Date().toISOString().split('T')[0] }); 
       setShowRestockModal(true); 
   };
@@ -226,15 +238,29 @@ const Inventory = () => {
   const submitRestock = async () => { 
     const qty = parseInt(restockData.qty);
     if (!qty || qty <= 0) return Swal.fire('Error', "Enter valid quantity", 'warning');
+    
+    // 🔒 LOCK BUTTON
+    setIsRestocking(true);
+
     try {
-      await apiClient.post('/inventory/restock', { product_id: String(restockData.id), quantity_arrived: qty, received_date: restockData.received_date });
+      await apiClient.post('/inventory/restock', { 
+          product_id: String(restockData.id), 
+          quantity_arrived: qty, 
+          received_date: restockData.received_date 
+      });
       
       setShowRestockModal(false); 
-      Toast.fire({ icon: 'success', title: 'Stock Updated Successfully' }); // 🔥 TOAST
+      Toast.fire({ icon: 'success', title: 'Stock Updated Successfully' });
       fetchProducts(pagination.current_page, true); 
-    } catch (err) { Swal.fire('Error', "Restock Failed", 'error'); }
+    } catch (err) { 
+        Swal.fire('Error', "Restock Failed", 'error'); 
+    } finally {
+        // 🔓 UNLOCK BUTTON
+        setIsRestocking(false);
+    }
   };
 
+  // --- MASTER DATA HANDLERS ---
   const handleMasterSubmit = async () => { 
     if (!masterInput.trim()) return;
     try {
@@ -247,11 +273,11 @@ const Inventory = () => {
       }
       if (editingMaster) { 
           await apiClient.put(`/inventory/${endpoint}/${editingMaster.id}`, payload); 
-          Toast.fire({ icon: 'success', title: `${masterTab} Updated` }); // 🔥 TOAST
+          Toast.fire({ icon: 'success', title: `${masterTab} Updated` });
       } 
       else { 
           await apiClient.post(`/inventory/${endpoint}`, payload); 
-          Toast.fire({ icon: 'success', title: `${masterTab} Added` }); // 🔥 TOAST
+          Toast.fire({ icon: 'success', title: `${masterTab} Added` });
       }
       setMasterInput(''); setEditingMaster(null); loadInventoryData();
     } catch (err) { Swal.fire('Error', "Action Failed", 'error'); }
@@ -266,7 +292,7 @@ const Inventory = () => {
           const endpoint = `/inventory/${type === 'product' ? 'products' : type + 's'}/${id}`;
           await apiClient.delete(endpoint);
           
-          Toast.fire({ icon: 'success', title: 'Item Deleted' }); // 🔥 TOAST
+          Toast.fire({ icon: 'success', title: 'Item Deleted' });
           
           if(type === 'product') fetchProducts(pagination.current_page, true);
           else loadInventoryData();
@@ -280,10 +306,9 @@ const Inventory = () => {
   const toggleActiveStatus = async (product) => { 
       try {
           const newStatus = !product.is_active;
-          // Optimistic Update
           setProductsData(prev => prev.map(p => p.id === product.id ? { ...p, is_active: newStatus } : p));
           await apiClient.patch(`/inventory/products/${product.id}/status`, { is_active: newStatus });
-          Toast.fire({ icon: 'success', title: `Product ${newStatus ? 'Activated' : 'Deactivated'}` }); // 🔥 TOAST
+          Toast.fire({ icon: 'success', title: `Product ${newStatus ? 'Activated' : 'Deactivated'}` });
       } catch (err) {
           fetchProducts(pagination.current_page);
           Toast.fire({ icon: 'error', title: 'Status Update Failed' });
@@ -439,7 +464,20 @@ const Inventory = () => {
                                 <div className="col-md-6"><label className="form-label small fw-bold text-warning">Low Stock Limit <span className="text-danger">*</span></label><input type="number" className={`form-control ${theme.input} border-warning`} required placeholder="e.g. 5" value={newProduct.low_stock_limit} onChange={e => setNewProduct({...newProduct, low_stock_limit: e.target.value})} /></div>
                                 <div className="col-12 mt-3"><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={newProduct.is_active} onChange={e => setNewProduct({...newProduct, is_active: e.target.checked})} /><label className="form-check-label fw-bold ms-2">Active Product</label></div></div>
                             </div>
-                            <button type="submit" className="btn btn-primary w-100 mt-4 py-2 fw-bold shadow-sm">{editingProduct ? 'Update Product' : 'Create Product'}</button>
+                            <button 
+                                type="submit" 
+                                className="btn btn-primary w-100 mt-4 py-2 fw-bold shadow-sm" 
+                                disabled={isSavingProduct}
+                            >
+                                {isSavingProduct ? (
+                                    <>
+                                        <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                        {editingProduct ? 'Updating...' : 'Creating...'}
+                                    </>
+                                ) : (
+                                    editingProduct ? 'Update Product' : 'Create Product'
+                                )}
+                            </button>
                         </form>
                     </div>
                 </div>
@@ -447,17 +485,56 @@ const Inventory = () => {
         </div>
       )}
 
-      {/* RESTOCK MODAL */}
+      {/* RESTOCK MODAL (FIXED) */}
       {showRestockModal && (
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-dialog-centered">
                 <div className={`modal-content ${theme.modalContent}`}>
-                    <div className={`modal-header ${theme.modalHeader}`}><h5 className="modal-title">Restock</h5><button className="btn-close" onClick={() => setShowRestockModal(false)}></button></div>
+                    <div className={`modal-header ${theme.modalHeader}`}>
+                        <h5 className="modal-title">Restock</h5>
+                        <button 
+                            className="btn-close" 
+                            onClick={() => !isRestocking && setShowRestockModal(false)} 
+                            disabled={isRestocking}
+                        ></button>
+                    </div>
                     <div className="modal-body p-4 text-center">
                         <h5 className="fw-bold">{restockData.name}</h5>
-                        <div className="text-start mb-3"><label className="form-label small fw-bold">Received Date</label><input type="date" className={`form-control ${theme.input}`} value={restockData.received_date} onChange={e => setRestockData({...restockData, received_date: e.target.value})} /></div>
-                        <div className="text-start mb-4"><label className="form-label small fw-bold">Quantity Arrived</label><input type="number" className={`form-control ${theme.input}`} placeholder="Enter Quantity" value={restockData.qty} onChange={e => setRestockData({...restockData, qty: e.target.value})} /></div>
-                        <button className="btn btn-success w-100" onClick={submitRestock}>Confirm Restock</button>
+                        <div className="text-start mb-3">
+                            <label className="form-label small fw-bold">Received Date</label>
+                            <input 
+                                type="date" 
+                                className={`form-control ${theme.input}`} 
+                                value={restockData.received_date} 
+                                onChange={e => setRestockData({...restockData, received_date: e.target.value})} 
+                                disabled={isRestocking} 
+                            />
+                        </div>
+                        <div className="text-start mb-4">
+                            <label className="form-label small fw-bold">Quantity Arrived</label>
+                            <input 
+                                type="number" 
+                                className={`form-control ${theme.input}`} 
+                                placeholder="Enter Quantity" 
+                                value={restockData.qty} 
+                                onChange={e => setRestockData({...restockData, qty: e.target.value})} 
+                                disabled={isRestocking} 
+                            />
+                        </div>
+                        <button 
+                            className="btn btn-success w-100 fw-bold" 
+                            onClick={submitRestock} 
+                            disabled={isRestocking}
+                        >
+                            {isRestocking ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                                    Processing...
+                                </>
+                            ) : (
+                                'Confirm Restock'
+                            )}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -469,7 +546,7 @@ const Inventory = () => {
         <div className="modal fade show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
             <div className="modal-dialog modal-lg modal-dialog-centered">
                 <div className={`modal-content ${theme.modalContent}`}>
-                    <div className={`modal-header ${theme.modalHeader}`}><h5 className="modal-title fw-bold">Manage Brands And Categories</h5><button className="btn-close" onClick={() => setShowMasterModal(false)}></button></div>
+                    <div className={`modal-header ${theme.modalHeader}`}><h5 className="modal-title fw-bold">Manage Data</h5><button className="btn-close" onClick={() => setShowMasterModal(false)}></button></div>
                     <div className="modal-body p-4">
                         <div className="d-flex gap-2 mb-3">
                             {['brand', 'category', 'sub-category'].map(t => (

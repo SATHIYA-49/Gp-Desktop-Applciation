@@ -1,6 +1,6 @@
 {
   "name": "golden-power",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "main": "main.js",
   "homepage": "./",
   "description": "Golden Power development process",
@@ -20,6 +20,8 @@
     "bootstrap-icons": "^1.13.1",
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.0.0",
     "lottie-react": "^2.4.1",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
